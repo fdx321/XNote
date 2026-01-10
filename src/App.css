@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+  
+  body {
+    @apply bg-background text-text overflow-hidden h-screen w-screen m-0 p-0 font-sans antialiased;
+  }
+
+  #root {
+    @apply h-full w-full;
+  }
+}
+
+/* Custom Scrollbar for WebKit */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-surfaceHighlight rounded-full border-2 border-surface;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted;
+}
