@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 
 type MermaidDiagramProps = {
   code: string;
+  diagramKey?: string;
 };
 
 type MermaidRenderResult = {
@@ -12,16 +13,32 @@ type MermaidRenderResult = {
 };
 
 let mermaidInitialized = false;
+const svgCache = new Map<string, { svg: string; ts: number }>();
 
-export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code }) => {
+const saveSvgCache = (key: string, svg: string) => {
+  svgCache.set(key, { svg, ts: Date.now() });
+  if (svgCache.size <= 40) return;
+  const entries = Array.from(svgCache.entries()).sort((a, b) => a[1].ts - b[1].ts);
+  for (let i = 0; i < entries.length - 40; i++) {
+    svgCache.delete(entries[i][0]);
+  }
+};
+
+export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, diagramKey }) => {
   const idRef = useRef(`mermaid-${Math.random().toString(36).slice(2)}`);
-  const [svg, setSvg] = useState<string>('');
+  const [svg, setSvg] = useState<string>(() => (diagramKey ? svgCache.get(diagramKey)?.svg ?? '' : ''));
+  const [lastError, setLastError] = useState<string | null>(null);
+  const [showErrorDetails, setShowErrorDetails] = useState(false);
+  const hasRenderedRef = useRef(false);
+  const [isRendering, setIsRendering] = useState(false);
+  const renderSeqRef = useRef(0);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const svgContainerRef = useRef<HTMLDivElement | null>(null);
   const [scale, setScale] = useState(1);
   const [translate, setTranslate] = useState({ x: 0, y: 0 });
   const [copyState, setCopyState] = useState<'idle' | 'copying' | 'copied'>('idle');
   const [styleMode] = useState<'normal' | 'handDrawn'>('handDrawn');
+  const firstRenderRef = useRef(true);
   const dragRef = useRef<{ active: boolean; pointerId: number | null; x: number; y: number; tx: number; ty: number }>({
     active: false,
     pointerId: null,
@@ -91,6 +108,24 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code }) => {
     const rest = stripLeadingInitDirectives(normalizedCode.slice(end + 3));
     return `${leading}${buildInitDirective(existingConfigText)}\n${rest.trimStart()}`;
   }, [normalizedCode, styleMode]);
+
+  useEffect(() => {
+    if (!diagramKey) return;
+    const cached = svgCache.get(diagramKey)?.svg;
+    if (!cached) return;
+    setSvg(prev => (prev ? prev : cached));
+    if (cached) hasRenderedRef.current = true;
+  }, [diagramKey]);
+
+  const formatRenderError = (err: unknown) => {
+    if (err instanceof Error) return `${err.name}: ${err.message}`;
+    if (typeof err === 'string') return err;
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return String(err);
+    }
+  };
 
   const clampScale = (value: number) => Math.min(3, Math.max(0.5, value));
 
@@ -529,30 +564,40 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code }) => {
 
   useEffect(() => {
     let cancelled = false;
+    const delayMs = firstRenderRef.current ? 0 : 250;
+    const seq = ++renderSeqRef.current;
+    setIsRendering(true);
+    const timer = window.setTimeout(() => {
+      firstRenderRef.current = false;
 
-    (async () => {
-      try {
-        const mermaid = await getMermaid();
+      (async () => {
+        try {
+          const mermaid = await getMermaid();
 
-        const renderId = `${idRef.current}-${styleMode}`;
-        const result = (await mermaid.render(renderId, codeForRender)) as MermaidRenderResult;
-        if (cancelled) return;
+          const renderId = `${idRef.current}-${styleMode}`;
+          const result = (await mermaid.render(renderId, codeForRender)) as MermaidRenderResult;
+          if (cancelled) return;
 
-        setSvg(result.svg);
-      } catch {
-        if (cancelled) return;
-        setSvg('');
-      }
-    })();
+          setSvg(result.svg);
+          hasRenderedRef.current = true;
+          setLastError(null);
+          setShowErrorDetails(false);
+          if (diagramKey) saveSvgCache(diagramKey, result.svg);
+          resetView();
+          if (seq === renderSeqRef.current) setIsRendering(false);
+        } catch (err) {
+          if (cancelled) return;
+          setLastError(formatRenderError(err));
+          if (seq === renderSeqRef.current) setIsRendering(false);
+        }
+      })();
+    }, delayMs);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [codeForRender, styleMode]);
-
-  useEffect(() => {
-    resetView();
-  }, [normalizedCode, styleMode, resetView]);
+  }, [codeForRender, styleMode, resetView, diagramKey]);
 
   useEffect(() => {
     const viewport = viewportRef.current;
@@ -602,16 +647,55 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code }) => {
     }
   };
 
-  if (!svg) {
+  if (!svg && !hasRenderedRef.current) {
+    if (lastError) {
+      return (
+        <div className="my-4 rounded-xl border border-border bg-surface p-4">
+          <div className="text-sm text-error font-medium">Mermaid 渲染失败</div>
+          <div className="mt-2 text-xs text-muted whitespace-pre-wrap">{lastError}</div>
+          <details className="mt-3">
+            <summary className="text-xs text-muted cursor-pointer select-none">查看代码</summary>
+            <pre className="mt-2">
+              <code className="language-mermaid">{normalizedCode}</code>
+            </pre>
+          </details>
+        </div>
+      );
+    }
+
     return (
-      <pre>
-        <code className="language-mermaid">{normalizedCode}</code>
-      </pre>
+      <div className="my-4 rounded-xl border border-border bg-white p-4 text-sm text-gray-600">
+        Rendering…
+      </div>
     );
   }
 
   return (
     <div className="mermaid-diagram relative my-4 rounded-xl border border-border bg-white">
+      {lastError && (
+        <div className="absolute left-2 top-2 z-10 max-w-[70%] pointer-events-auto">
+          <div className="rounded-lg border border-red-500/40 bg-red-500/10 backdrop-blur-sm px-2 py-1 text-xs text-red-200">
+            <div className="flex items-center gap-2">
+              <span className="truncate">渲染失败：已显示上次结果</span>
+              <button
+                type="button"
+                className="text-red-200/90 hover:text-red-100 underline"
+                onClick={() => setShowErrorDetails(v => !v)}
+              >
+                {showErrorDetails ? '收起' : '详情'}
+              </button>
+            </div>
+            {showErrorDetails && <div className="mt-1 whitespace-pre-wrap break-words">{lastError}</div>}
+          </div>
+        </div>
+      )}
+      {isRendering && svg && (
+        <div className="absolute left-2 bottom-2 z-10 pointer-events-none">
+          <div className="rounded-md border border-border bg-white/80 px-2 py-1 text-xs text-gray-600 backdrop-blur-sm">
+            Rendering…
+          </div>
+        </div>
+      )}
       <div className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-lg border border-border bg-white/80 p-0.5 backdrop-blur-sm">
         <button
           type="button"

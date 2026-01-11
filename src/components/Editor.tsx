@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo, useDeferredValue } from 'react';
 import Editor, { OnMount } from '@monaco-editor/react';
 import ReactMarkdown from 'react-markdown';
 import rehypeRaw from 'rehype-raw';
@@ -14,12 +14,29 @@ import plantumlEncoder from 'plantuml-encoder';
 import { MermaidDiagram } from './MermaidDiagram';
 import { prepareMarkdownForPreview } from '../utils/markdownExtensions';
 
+const getCodeText = (children: any) => {
+  if (typeof children === 'string') return children;
+  if (Array.isArray(children)) return children.join('');
+  return String(children);
+};
+
+const hashString = (input: string) => {
+  let h = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return (h >>> 0).toString(16);
+};
+
 export const NoteEditor: React.FC = () => {
   const { selectedFile, editorMode, setEditorMode, currentPath, searchJump, setSearchJump } = useAppStore();
   const [content, setContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const editorRef = useRef<any>(null);
   const [editorInstance, setEditorInstance] = useState<any>(null);
+  const deferredContent = useDeferredValue(content);
+  const mermaidBlockIndexRef = useRef(0);
 
   const isTauri = (window as any).__TAURI_INTERNALS__;
   const selectedFileRef = useRef<typeof selectedFile | null>(null);
@@ -184,6 +201,40 @@ export const NoteEditor: React.FC = () => {
       }
       return <img {...props} src={displaySrc} onError={onError} className="rounded-lg shadow-md max-w-full" />;
   };
+
+  const markdownComponents = useMemo(() => {
+    const fileKey = selectedFile?.path ? String(selectedFile.path) : 'unknown';
+    return {
+      img: MarkdownImage,
+      code({ node, inline, className, children, ...props }: any) {
+        const match = /language-(\w+)/.exec(className || '');
+        const lang = match ? match[1] : '';
+        const codeText = getCodeText(children).replace(/\n$/, '');
+
+        if (!inline && lang === 'mermaid') {
+          const idx = mermaidBlockIndexRef.current++;
+          const diagramKey = `${fileKey}:mermaid:${idx}:${hashString(codeText)}`;
+          return <MermaidDiagram code={codeText} diagramKey={diagramKey} />;
+        }
+
+        if (lang === 'plantuml') {
+          const encoded = plantumlEncoder.encode(codeText);
+          const url = `https://www.plantuml.com/plantuml/svg/${encoded}`;
+          return <img src={url} alt="PlantUML Diagram" className="max-w-full rounded bg-white p-2" />;
+        }
+
+        return match ? (
+          <code className={className} {...props}>
+            {children}
+          </code>
+        ) : (
+          <code className={className} {...props}>
+            {children}
+          </code>
+        );
+      }
+    };
+  }, [selectedFile?.path]);
   
   // Resize Logic
   const [editorPercentage, setEditorPercentage] = useState(50);
@@ -330,12 +381,7 @@ class Duck {
   }
 
   const isUml = selectedFile.name.endsWith('.uml') || selectedFile.name.endsWith('.puml');
-  
-  const getCodeText = (children: any) => {
-      if (typeof children === 'string') return children;
-      if (Array.isArray(children)) return children.join('');
-      return String(children);
-  };
+  mermaidBlockIndexRef.current = 0;
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-background">
@@ -452,36 +498,9 @@ class Duck {
                     <ReactMarkdown 
                         remarkPlugins={[remarkGfm]}
                         rehypePlugins={[rehypeRaw, rehypeHighlight]}
-                        components={{
-                            img: MarkdownImage,
-                            code({ node, inline, className, children, ...props }: any) {
-                                const match = /language-(\w+)/.exec(className || '');
-                                const lang = match ? match[1] : '';
-                                const codeText = getCodeText(children).replace(/\n$/, '');
-                                
-                                if (!inline && lang === 'mermaid') {
-                                    return <MermaidDiagram code={codeText} />;
-                                }
-                                
-                                if (lang === 'plantuml') {
-                                    const encoded = plantumlEncoder.encode(codeText);
-                                    const url = `https://www.plantuml.com/plantuml/svg/${encoded}`;
-                                    return <img src={url} alt="PlantUML Diagram" className="max-w-full rounded bg-white p-2" />;
-                                }
-                                
-                                return match ? (
-                                    <code className={className} {...props}>
-                                        {children}
-                                    </code>
-                                ) : (
-                                    <code className={className} {...props}>
-                                        {children}
-                                    </code>
-                                );
-                            }
-                        }}
+                        components={markdownComponents}
                     >
-                        {prepareMarkdownForPreview(content)}
+                        {prepareMarkdownForPreview(deferredContent)}
                     </ReactMarkdown>
                   )}
               </div>
