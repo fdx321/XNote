@@ -7,6 +7,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { SettingsModal } from './components/SettingsModal';
 import { CleanUnusedImagesModal } from './components/CleanUnusedImagesModal';
+import { Notice } from './components/Notice';
 
 function App() {
   const { currentPath, viewMode, selectedFile, loadFiles, loadConfig, sidebarWidth, setSidebarWidth, searchShortcut, setSearchShortcut, theme, setTheme } = useAppStore();
@@ -77,13 +78,20 @@ function App() {
             setShowSettings(true);
         });
         unlistenFeatures = await listen('features-clean-unused-images', () => {
+            const workspacePath = useAppStore.getState().currentPath;
             setUnusedImages([]);
             setShowCleanModal(false);
             setCleanLog('');
             setCleanBarVisible(true);
+            if (!workspacePath) {
+              setCleanRunning(false);
+              setCleanProgress({ message: 'Workspace not ready', current: 0, total: 0 });
+              setCleanLog('Clean: workspace path is empty');
+              return;
+            }
             setCleanRunning(true);
             setCleanProgress({ message: 'Starting…', current: 0, total: 0 });
-            invoke('start_find_unused_images_scan', { rootPath: currentPath, root_path: currentPath }).catch(() => {});
+            invoke('start_find_unused_images_scan', { rootPath: workspacePath, root_path: workspacePath }).catch(() => {});
         });
         unlistenCleanProgress = await listen('clean-unused-images-progress', (event: any) => {
             const payload = event?.payload as any;
@@ -213,6 +221,7 @@ function App() {
 
   return (
     <div className="app-container flex flex-col h-screen w-screen bg-background text-text overflow-hidden" style={{ cursor: isResizing ? 'col-resize' : 'auto' }}>
+      <Notice />
       <div className="app-main-row flex flex-row flex-1 min-h-0 overflow-hidden">
         {currentPath && (
           <>
@@ -314,10 +323,18 @@ function App() {
         unusedImages={unusedImages}
         onClose={() => setShowCleanModal(false)}
         onConfirmDelete={async () => {
+          const workspacePath = useAppStore.getState().currentPath;
+          if (!workspacePath) {
+            setCleanBarVisible(true);
+            setCleanRunning(false);
+            setCleanProgress({ message: 'Workspace not ready', current: 0, total: 0 });
+            setCleanLog('Clean: workspace path is empty');
+            return;
+          }
           setCleanBarVisible(true);
           setCleanRunning(true);
           setCleanProgress({ message: 'Deleting…', current: 0, total: unusedImages.length });
-          await invoke('start_delete_unused_images', { rootPath: currentPath, root_path: currentPath, paths: unusedImages });
+          await invoke('start_delete_unused_images', { rootPath: workspacePath, root_path: workspacePath, paths: unusedImages });
           setUnusedImages([]);
         }}
       />

@@ -6,6 +6,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { ContextMenu } from './ContextMenu';
 import { MoveToModal } from './MoveToModal';
 import { SearchModal, SearchHit } from './SearchModal';
+import { getDepthFromRootPath } from '../utils/path';
 
 interface SidebarProps {}
 
@@ -49,7 +50,7 @@ import { InputModal } from './InputModal';
 import { ConfirmModal } from './ConfirmModal';
 
 export const Sidebar: React.FC<SidebarProps> = () => {
-  const { files, selectedFile, setSelectedFile, currentPath, loadFiles, setViewMode, moveFile, deleteFile, copyFile, renameFile, setViewPath, viewPath, setSearchJump, searchShortcut } = useAppStore();
+  const { files, selectedFile, setSelectedFile, currentPath, loadFiles, setViewMode, moveFile, deleteFile, copyFile, renameFile, setViewPath, viewPath, setSearchJump, searchShortcut, pushNotice } = useAppStore();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; target: any; type: 'root' | 'folder' | 'file' } | null>(null);
   
@@ -138,12 +139,23 @@ export const Sidebar: React.FC<SidebarProps> = () => {
   // Sync expanded state with viewPath if it changes externally (e.g. from Dashboard navigation)
   React.useEffect(() => {
       if (viewPath && viewPath !== currentPath) {
-          // Ensure all parents are expanded
-          // This logic requires knowing parents, but for now we can just ensure the folder itself is expanded
-          // Actually, we want to highlight the folder.
-          
-          // Simple expand logic: expand the path itself if it's a folder
-          setExpanded(prev => ({ ...prev, [viewPath]: true }));
+          const normalize = (p: string) => p.replace(/\/+$/, '');
+          const root = normalize(currentPath);
+          const target = normalize(viewPath);
+          if (!target.startsWith(root)) {
+              setExpanded(prev => ({ ...prev, [viewPath]: true }));
+              return;
+          }
+          const rel = target.slice(root.length).replace(/^\/+/, '');
+          if (!rel) return;
+          const parts = rel.split('/').filter(Boolean);
+          let acc = root;
+          const updates: Record<string, boolean> = {};
+          for (const part of parts) {
+              acc = `${acc}/${part}`;
+              updates[acc] = true;
+          }
+          setExpanded(prev => ({ ...prev, ...updates }));
       }
   }, [viewPath, currentPath]);
 
@@ -224,12 +236,23 @@ export const Sidebar: React.FC<SidebarProps> = () => {
   };
 
   const openNewGroupModal = (parentPath: string) => {
+      const depth = getDepthFromRootPath(currentPath, String(parentPath));
+      if (depth !== null && depth >= 2) {
+          pushNotice("二级目录下不允许新建文件夹", "info");
+          return;
+      }
       setNewGroupState({ isOpen: true, parentPath });
   };
 
   const onNewGroupSubmit = async (name: string) => {
       const parentPath = newGroupState.parentPath;
       if (!parentPath) {
+          return;
+      }
+
+      const depth = getDepthFromRootPath(currentPath, String(parentPath));
+      if (depth !== null && depth >= 2) {
+          pushNotice("二级目录下不允许新建文件夹", "info");
           return;
       }
 

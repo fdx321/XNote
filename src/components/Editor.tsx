@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import Editor, { OnMount } from '@monaco-editor/react';
 import ReactMarkdown from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
 import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import { useAppStore } from '../store';
@@ -10,6 +11,8 @@ import { clsx } from 'clsx';
 import 'highlight.js/styles/github-dark.css'; // or atom-one-dark
 // @ts-ignore
 import plantumlEncoder from 'plantuml-encoder';
+import { MermaidDiagram } from './MermaidDiagram';
+import { prepareMarkdownForPreview } from '../utils/markdownExtensions';
 
 export const NoteEditor: React.FC = () => {
   const { selectedFile, editorMode, setEditorMode, currentPath, searchJump, setSearchJump } = useAppStore();
@@ -327,6 +330,12 @@ class Duck {
   }
 
   const isUml = selectedFile.name.endsWith('.uml') || selectedFile.name.endsWith('.puml');
+  
+  const getCodeText = (children: any) => {
+      if (typeof children === 'string') return children;
+      if (Array.isArray(children)) return children.join('');
+      return String(children);
+  };
 
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden bg-background">
@@ -442,15 +451,20 @@ class Duck {
                   ) : (
                     <ReactMarkdown 
                         remarkPlugins={[remarkGfm]}
-                        rehypePlugins={[rehypeHighlight]}
+                        rehypePlugins={[rehypeRaw, rehypeHighlight]}
                         components={{
                             img: MarkdownImage,
-                            code({node, className, children, ...props}: any) {
+                            code({ node, inline, className, children, ...props }: any) {
                                 const match = /language-(\w+)/.exec(className || '');
                                 const lang = match ? match[1] : '';
+                                const codeText = getCodeText(children).replace(/\n$/, '');
+                                
+                                if (!inline && lang === 'mermaid') {
+                                    return <MermaidDiagram code={codeText} />;
+                                }
                                 
                                 if (lang === 'plantuml') {
-                                    const encoded = plantumlEncoder.encode(String(children).replace(/\n$/, ''));
+                                    const encoded = plantumlEncoder.encode(codeText);
                                     const url = `https://www.plantuml.com/plantuml/svg/${encoded}`;
                                     return <img src={url} alt="PlantUML Diagram" className="max-w-full rounded bg-white p-2" />;
                                 }
@@ -467,7 +481,7 @@ class Duck {
                             }
                         }}
                     >
-                        {content}
+                        {prepareMarkdownForPreview(content)}
                     </ReactMarkdown>
                   )}
               </div>

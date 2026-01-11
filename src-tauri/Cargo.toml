@@ -27,3 +27,5 @@ chrono = { version = "0.4", features = ["serde"] }
 image = "0.24"
 base64 = "0.21"
 dirs = "5.0"
+arboard = "3.4.1"
+resvg = "0.44"

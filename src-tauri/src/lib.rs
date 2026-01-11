@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::fs;
 use std::path::{Path, PathBuf};
 use chrono::{DateTime, Local};
@@ -7,7 +8,7 @@ use std::io::Write;
 use walkdir::WalkDir;
 use std::collections::HashSet;
 use tauri::async_runtime;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{mpsc, Arc, Mutex, OnceLock};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FileNode {
@@ -112,20 +113,35 @@ fn get_files(path: String) -> Result<Vec<FileNode>, String> {
         return Err("Directory does not exist".to_string());
     }
 
-    let mut nodes: Vec<FileNode> = Vec::new();
+    const MAX_DEPTH: usize = 3;
 
-    // Level 1: Directories (Categories) and Files in Root
-    if let Ok(entries) = fs::read_dir(root_path) {
+    fn is_valid_file(name: &str) -> bool {
+        name.ends_with(".md") || name.ends_with(".uml") || name.ends_with(".puml")
+    }
+
+    fn sort_nodes(nodes: &mut Vec<FileNode>) {
+        nodes.sort_by(|a, b| {
+            if a.is_dir == b.is_dir {
+                a.name.cmp(&b.name)
+            } else {
+                b.is_dir.cmp(&a.is_dir)
+            }
+        });
+    }
+
+    fn read_children(dir: &Path, depth: usize) -> Vec<FileNode> {
+        let mut children: Vec<FileNode> = Vec::new();
+        let Ok(entries) = fs::read_dir(dir) else { return children };
+
         for entry in entries.flatten() {
             let path_buf = entry.path();
             let is_dir = path_buf.is_dir();
             let name = entry.file_name().to_string_lossy().to_string();
-            
-            // Filter: Only folders and .md, .uml, .puml files
-            if !is_dir && !name.ends_with(".md") && !name.ends_with(".uml") && !name.ends_with(".puml") {
+
+            if name.starts_with(".") {
                 continue;
             }
-            if name.starts_with(".") {
+            if !is_dir && !is_valid_file(&name) {
                 continue;
             }
 
@@ -138,56 +154,32 @@ fn get_files(path: String) -> Result<Vec<FileNode>, String> {
             };
 
             if is_dir {
-                // Level 2: Files in subdirectory
-                let mut children: Vec<FileNode> = Vec::new();
-                if let Ok(sub_entries) = fs::read_dir(&path_buf) {
-                    for sub_entry in sub_entries.flatten() {
-                        let sub_path = sub_entry.path();
-                        let sub_name = sub_entry.file_name().to_string_lossy().to_string();
-                        let is_valid_file = sub_name.ends_with(".md") || sub_name.ends_with(".uml") || sub_name.ends_with(".puml");
-                        if !sub_path.is_dir() && is_valid_file && !sub_name.starts_with(".") {
-                             let metadata = fs::metadata(&sub_path).ok();
-                             let last_modified = metadata.and_then(|m| m.modified().ok())
-                                .map(|t| {
-                                    let dt: DateTime<Local> = t.into();
-                                    dt.format("%Y-%m-%d %H:%M").to_string()
-                                });
-
-                            children.push(FileNode {
-                                name: sub_name,
-                                path: sub_path.to_string_lossy().to_string(),
-                                is_dir: false,
-                                children: None,
-                                last_modified,
-                            });
-                        }
-                    }
+                if depth < MAX_DEPTH {
+                    let mut grand_children = read_children(&path_buf, depth + 1);
+                    sort_nodes(&mut grand_children);
+                    node.children = Some(grand_children);
+                } else {
+                    node.children = Some(Vec::new());
                 }
-                children.sort_by(|a, b| a.name.cmp(&b.name));
-                node.children = Some(children);
             } else {
-                 let metadata = fs::metadata(&path_buf).ok();
-                 let last_modified = metadata.and_then(|m| m.modified().ok())
+                let metadata = fs::metadata(&path_buf).ok();
+                let last_modified = metadata
+                    .and_then(|m| m.modified().ok())
                     .map(|t| {
                         let dt: DateTime<Local> = t.into();
                         dt.format("%Y-%m-%d %H:%M").to_string()
                     });
-                 node.last_modified = last_modified;
+                node.last_modified = last_modified;
             }
-            nodes.push(node);
+
+            children.push(node);
         }
-    } else {
-        println!("Backend: Failed to read directory: {}", path);
+
+        children
     }
-    
-    // Sort: Folders first, then files
-    nodes.sort_by(|a, b| {
-        if a.is_dir == b.is_dir {
-            a.name.cmp(&b.name)
-        } else {
-            b.is_dir.cmp(&a.is_dir) // true > false
-        }
-    });
+
+    let mut nodes = read_children(root_path, 1);
+    sort_nodes(&mut nodes);
 
     println!("Backend: Found {} nodes", nodes.len());
     Ok(nodes)
@@ -275,6 +267,93 @@ fn save_image(img_data_base64: String, save_dir: String) -> Result<String, Strin
 fn read_file_base64(path: String) -> Result<String, String> {
     let bytes = fs::read(path).map_err(|e| e.to_string())?;
     Ok(general_purpose::STANDARD.encode(bytes))
+}
+
+#[tauri::command]
+fn set_clipboard_image(app: AppHandle, png_data_base64: String) -> Result<(), String> {
+    let data_start = png_data_base64.find(",").map(|i| i + 1).unwrap_or(0);
+    let raw_data = &png_data_base64[data_start..];
+    let bytes = general_purpose::STANDARD
+        .decode(raw_data)
+        .map_err(|e| format!("base64 decode failed: {}", e))?;
+
+    let img = image::load_from_memory(&bytes).map_err(|e| format!("image decode failed: {}", e))?;
+    let rgba = img.to_rgba8();
+    let (width, height) = rgba.dimensions();
+    let data = rgba.into_raw();
+
+    let (tx, rx) = mpsc::channel::<Result<(), String>>();
+
+    app.run_on_main_thread(move || {
+        let result = (|| -> Result<(), String> {
+            let mut clipboard =
+                arboard::Clipboard::new().map_err(|e| format!("clipboard init failed: {}", e))?;
+            clipboard
+                .set_image(arboard::ImageData {
+                    width: width as usize,
+                    height: height as usize,
+                    bytes: Cow::Owned(data),
+                })
+                .map_err(|e| format!("clipboard set_image failed: {}", e))?;
+            Ok(())
+        })();
+        let _ = tx.send(result);
+    })
+    .map_err(|e| format!("run_on_main_thread failed: {}", e))?;
+
+    rx.recv()
+        .map_err(|e| format!("clipboard result receive failed: {}", e))?
+}
+
+#[tauri::command]
+fn set_clipboard_image_from_svg(app: AppHandle, svg_text: String) -> Result<(), String> {
+    let mut fontdb = resvg::usvg::fontdb::Database::new();
+    fontdb.load_system_fonts();
+    let mut opt = resvg::usvg::Options::default();
+    opt.fontdb = Arc::new(fontdb);
+
+    let tree = resvg::usvg::Tree::from_str(&svg_text, &opt)
+        .map_err(|e| format!("svg parse failed: {}", e))?;
+
+    let size = tree.size();
+    let width = size.width().ceil() as u32;
+    let height = size.height().ceil() as u32;
+    if width == 0 || height == 0 {
+        return Err("svg size is zero".to_string());
+    }
+
+    let dpr: f32 = 2.0;
+    let out_width = ((width as f32) * dpr).ceil() as u32;
+    let out_height = ((height as f32) * dpr).ceil() as u32;
+
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(out_width, out_height)
+        .ok_or_else(|| "pixmap alloc failed".to_string())?;
+    let transform = resvg::usvg::Transform::from_scale(dpr, dpr);
+    let mut pixmap_mut = pixmap.as_mut();
+    resvg::render(&tree, transform, &mut pixmap_mut);
+
+    let data = pixmap.data().to_vec();
+
+    let (tx, rx) = mpsc::channel::<Result<(), String>>();
+    app.run_on_main_thread(move || {
+        let result = (|| -> Result<(), String> {
+            let mut clipboard =
+                arboard::Clipboard::new().map_err(|e| format!("clipboard init failed: {}", e))?;
+            clipboard
+                .set_image(arboard::ImageData {
+                    width: out_width as usize,
+                    height: out_height as usize,
+                    bytes: Cow::Owned(data),
+                })
+                .map_err(|e| format!("clipboard set_image failed: {}", e))?;
+            Ok(())
+        })();
+        let _ = tx.send(result);
+    })
+    .map_err(|e| format!("run_on_main_thread failed: {}", e))?;
+
+    rx.recv()
+        .map_err(|e| format!("clipboard result receive failed: {}", e))?
 }
 
 #[derive(Serialize)]
@@ -896,6 +975,8 @@ pub fn run() {
             create_folder,
             save_image,
             read_file_base64,
+            set_clipboard_image,
+            set_clipboard_image_from_svg,
             search_text,
             find_unused_images,
             get_default_workspace,

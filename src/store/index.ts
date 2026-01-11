@@ -10,6 +10,8 @@ export interface FileNode {
   last_modified?: String;
 }
 
+export type NoticeType = 'info' | 'success' | 'error';
+
 export type AppTheme = 'zinc' | 'midnight' | 'grape';
 
 const applyTheme = (theme: AppTheme) => {
@@ -29,6 +31,7 @@ interface AppState {
   searchJump: { path: string; line: number } | null;
   searchShortcut: string;
   theme: AppTheme;
+  notice: { id: number; type: NoticeType; message: string } | null;
 
   // Actions
   setFiles: (files: FileNode[]) => void;
@@ -41,6 +44,8 @@ interface AppState {
   setSearchJump: (jump: { path: string; line: number } | null) => void;
   setSearchShortcut: (shortcut: string) => void;
   setTheme: (theme: AppTheme) => void;
+  pushNotice: (message: string, type?: NoticeType) => void;
+  clearNotice: () => void;
   loadFiles: (path: string) => Promise<void>;
   moveFile: (source: string, target: string) => Promise<void>;
   renameFile: (path: string, newName: string) => Promise<void>;
@@ -61,6 +66,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   searchJump: null,
   searchShortcut: 'Cmd+G',
   theme: 'zinc',
+  notice: null,
 
   setFiles: (files) => set({ files }),
   setCurrentPath: (path) => set({ currentPath: path }),
@@ -85,6 +91,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       applyTheme(theme);
       get().saveConfig();
   },
+  pushNotice: (message, type = 'info') => set({ notice: { id: Date.now(), type, message } }),
+  clearNotice: () => set({ notice: null }),
   
   loadConfig: async () => {
       try {

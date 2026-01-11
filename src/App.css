@@ -33,3 +33,13 @@
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-muted;
 }
+
+.mermaid-diagram {
+  overflow: hidden;
+}
+
+.mermaid-diagram svg {
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
