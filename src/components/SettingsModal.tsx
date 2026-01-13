@@ -37,9 +37,10 @@ const buildShortcutString = (e: KeyboardEvent) => {
 interface SettingsModalProps {
   isOpen: boolean;
   searchShortcut: string;
+  closeEditorShortcut: string;
   theme: AppTheme;
   onClose: () => void;
-  onSave: (next: { searchShortcut: string; theme: AppTheme }) => void;
+  onSave: (next: { searchShortcut: string; closeEditorShortcut: string; theme: AppTheme }) => void;
 }
 
 const THEME_OPTIONS: Array<{ value: AppTheme; label: string; hint: string }> = [
@@ -48,24 +49,34 @@ const THEME_OPTIONS: Array<{ value: AppTheme; label: string; hint: string }> = [
   { value: 'grape', label: 'Grape', hint: 'Purple-tinted dark' },
 ];
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShortcut, theme, onClose, onSave }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShortcut, closeEditorShortcut, theme, onClose, onSave }) => {
   const [value, setValue] = useState(searchShortcut || 'Cmd+G');
+  const [closeValue, setCloseValue] = useState('Cmd+W');
   const [isRecording, setIsRecording] = useState(false);
+  const [isRecordingClose, setIsRecordingClose] = useState(false);
   const [themeValue, setThemeValue] = useState<AppTheme>(theme || 'zinc');
   const inputRef = useRef<HTMLInputElement>(null);
+  const closeInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     setValue(searchShortcut || 'Cmd+G');
+    setCloseValue(closeEditorShortcut || 'Cmd+W');
     setIsRecording(false);
+    setIsRecordingClose(false);
     setThemeValue(theme || 'zinc');
     setTimeout(() => inputRef.current?.focus(), 30);
-  }, [isOpen, searchShortcut, theme]);
+  }, [isOpen, searchShortcut, closeEditorShortcut, theme]);
 
   const displayKey = useMemo(() => {
     const v = value || 'Cmd+G';
     return formatShortcutSymbols(v);
   }, [value]);
+
+  const displayCloseKey = useMemo(() => {
+    const v = closeValue || 'Cmd+W';
+    return formatShortcutSymbols(v);
+  }, [closeValue]);
 
   useEffect(() => {
     if (!isOpen || !isRecording) return;
@@ -79,6 +90,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShor
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
   }, [isOpen, isRecording]);
+
+  useEffect(() => {
+    if (!isOpen || !isRecordingClose) return;
+    const handler = (e: KeyboardEvent) => {
+      e.preventDefault();
+      const next = buildShortcutString(e);
+      if (!next) return;
+      setCloseValue(next);
+      setIsRecordingClose(false);
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [isOpen, isRecordingClose]);
 
   if (!isOpen) return null;
 
@@ -110,13 +134,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShor
             <div className="flex items-center gap-2">
               <input
                 ref={inputRef}
-                value={isRecording ? 'Press shortcut…' : (value || 'Cmd+G')}
+                value={value || 'Cmd+G'}
                 readOnly
                 onFocus={() => setIsRecording(true)}
                 onClick={() => setIsRecording(true)}
-                className="w-44 bg-background/40 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none cursor-pointer"
+                className={`w-44 bg-background/40 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none cursor-pointer ${isRecording ? 'ring-1 ring-accent/60' : ''}`}
               />
               <div className="text-xs text-muted border border-border rounded px-2 py-1">{displayKey}</div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 border border-border rounded-xl px-4 py-3 bg-background/20">
+            <div className="min-w-0">
+              <div className="text-sm text-text font-semibold">Close Editor</div>
+              <div className="text-xs text-muted mt-1">Close current file and return to folder view.</div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                ref={closeInputRef}
+                value={closeValue || 'Cmd+W'}
+                readOnly
+                onFocus={() => setIsRecordingClose(true)}
+                onClick={() => setIsRecordingClose(true)}
+                className={`w-44 bg-background/40 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none cursor-pointer ${isRecordingClose ? 'ring-1 ring-accent/60' : ''}`}
+              />
+              <div className="text-xs text-muted border border-border rounded px-2 py-1">{displayCloseKey}</div>
             </div>
           </div>
 
@@ -154,7 +197,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShor
           <button
             className="px-3 py-2 text-sm rounded-lg bg-accent text-white hover:opacity-90"
             onClick={() => {
-              onSave({ searchShortcut: value || 'Cmd+G', theme: themeValue || 'zinc' });
+              onSave({ searchShortcut: value || 'Cmd+G', closeEditorShortcut: closeValue || 'Cmd+W', theme: themeValue || 'zinc' });
               onClose();
             }}
           >

@@ -10,7 +10,7 @@ import { CleanUnusedImagesModal } from './components/CleanUnusedImagesModal';
 import { Notice } from './components/Notice';
 
 function App() {
-  const { currentPath, viewMode, selectedFile, loadFiles, loadConfig, sidebarWidth, setSidebarWidth, searchShortcut, setSearchShortcut, theme, setTheme } = useAppStore();
+  const { currentPath, viewMode, selectedFile, loadFiles, loadConfig, sidebarWidth, setSidebarWidth, searchShortcut, setSearchShortcut, closeEditorShortcut, setCloseEditorShortcut, theme, setTheme } = useAppStore();
   const [showAbout, setShowAbout] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [cleanProgress, setCleanProgress] = useState<{ message: string; current: number; total: number }>({
@@ -309,11 +309,13 @@ function App() {
       <SettingsModal
         isOpen={showSettings}
         searchShortcut={searchShortcut}
+        closeEditorShortcut={closeEditorShortcut}
         theme={theme}
         onClose={() => setShowSettings(false)}
         onSave={(next) => {
           setTheme(next.theme);
           setSearchShortcut(next.searchShortcut);
+          setCloseEditorShortcut(next.closeEditorShortcut);
         }}
       />
 

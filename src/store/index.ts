@@ -30,6 +30,7 @@ interface AppState {
   sidebarWidth: number;
   searchJump: { path: string; line: number } | null;
   searchShortcut: string;
+  closeEditorShortcut: string;
   theme: AppTheme;
   notice: { id: number; type: NoticeType; message: string } | null;
 
@@ -43,6 +44,7 @@ interface AppState {
   setSidebarWidth: (width: number) => void;
   setSearchJump: (jump: { path: string; line: number } | null) => void;
   setSearchShortcut: (shortcut: string) => void;
+  setCloseEditorShortcut: (shortcut: string) => void;
   setTheme: (theme: AppTheme) => void;
   pushNotice: (message: string, type?: NoticeType) => void;
   clearNotice: () => void;
@@ -65,6 +67,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   sidebarWidth: 256,
   searchJump: null,
   searchShortcut: 'Cmd+G',
+  closeEditorShortcut: 'Cmd+W',
   theme: 'zinc',
   notice: null,
 
@@ -84,6 +87,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setSearchJump: (jump) => set({ searchJump: jump }),
   setSearchShortcut: (shortcut) => {
       set({ searchShortcut: shortcut });
+      get().saveConfig();
+  },
+  setCloseEditorShortcut: (shortcut) => {
+      set({ closeEditorShortcut: shortcut });
       get().saveConfig();
   },
   setTheme: (theme) => {
@@ -106,6 +113,7 @@ export const useAppStore = create<AppState>((set, get) => ({
                       sidebarWidth: config.sidebarWidth ?? 256,
                       editorMode: config.editorMode ?? 'split',
                       searchShortcut: config.shortcuts?.search ?? 'Cmd+G',
+                      closeEditorShortcut: config.shortcuts?.closeEditor ?? config.shortcuts?.close ?? 'Cmd+W',
                       theme
                   });
                   applyTheme(theme);
@@ -117,7 +125,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   saveConfig: async () => {
-      const { sidebarWidth, editorMode, searchShortcut, theme } = get();
+      const { sidebarWidth, editorMode, searchShortcut, closeEditorShortcut, theme } = get();
       try {
           // @ts-ignore
           if (window.__TAURI_INTERNALS__) {
@@ -126,7 +134,8 @@ export const useAppStore = create<AppState>((set, get) => ({
                   editorMode,
                   theme,
                   shortcuts: {
-                      search: searchShortcut
+                      search: searchShortcut,
+                      closeEditor: closeEditorShortcut
                   }
               };
               await invoke('save_config', { config: JSON.stringify(config) });

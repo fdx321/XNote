@@ -50,7 +50,7 @@ import { InputModal } from './InputModal';
 import { ConfirmModal } from './ConfirmModal';
 
 export const Sidebar: React.FC<SidebarProps> = () => {
-  const { files, selectedFile, setSelectedFile, currentPath, loadFiles, setViewMode, moveFile, deleteFile, copyFile, renameFile, setViewPath, viewPath, setSearchJump, searchShortcut, pushNotice } = useAppStore();
+  const { files, selectedFile, setSelectedFile, currentPath, loadFiles, setViewMode, moveFile, deleteFile, copyFile, renameFile, setViewPath, viewPath, setSearchJump, searchShortcut, closeEditorShortcut, pushNotice } = useAppStore();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; target: any; type: 'root' | 'folder' | 'file' } | null>(null);
   
@@ -115,24 +115,41 @@ export const Sidebar: React.FC<SidebarProps> = () => {
 
   useEffect(() => {
       const handler = (e: KeyboardEvent) => {
+          const matchShortcut = (shortcutText: string) => {
+              const { mods, main } = parseShortcut(shortcutText);
+              const eventMain = normalizeMainKey(e.key);
+              const keyOk = !!main && eventMain === main;
+              const modsOk =
+                  (!mods.has('cmd') || e.metaKey) &&
+                  (!mods.has('ctrl') || e.ctrlKey) &&
+                  (!mods.has('alt') || e.altKey) &&
+                  (!mods.has('shift') || e.shiftKey) &&
+                  (mods.has('cmd') || mods.has('ctrl') || mods.has('alt') || mods.has('shift'));
+              return keyOk && modsOk;
+          };
+
+          const closeShortcut = closeEditorShortcut || 'Cmd+W';
+          if (matchShortcut(closeShortcut)) {
+              if (!selectedFile || (selectedFile as any).is_dir) return;
+              e.preventDefault();
+              const p = String((selectedFile as any).path || '');
+              const idx = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+              const parent = idx > 0 ? p.slice(0, idx) : (currentPath || '');
+              setViewMode('card');
+              setViewPath(parent || currentPath || null);
+              setSelectedFile(null);
+              return;
+          }
+
           const shortcut = searchShortcut || 'Cmd+G';
-          const { mods, main } = parseShortcut(shortcut);
-          const eventMain = normalizeMainKey(e.key);
-          const keyOk = !!main && eventMain === main;
-          const modsOk =
-              (!mods.has('cmd') || e.metaKey) &&
-              (!mods.has('ctrl') || e.ctrlKey) &&
-              (!mods.has('alt') || e.altKey) &&
-              (!mods.has('shift') || e.shiftKey) &&
-              (mods.has('cmd') || mods.has('ctrl') || mods.has('alt') || mods.has('shift'));
-          if (keyOk && modsOk) {
+          if (matchShortcut(shortcut)) {
               e.preventDefault();
               setSearchOpen(true);
           }
       };
       window.addEventListener('keydown', handler);
       return () => window.removeEventListener('keydown', handler);
-  }, [searchShortcut]);
+  }, [searchShortcut, closeEditorShortcut, selectedFile, currentPath, setSelectedFile, setViewMode, setViewPath]);
 
   const isLoading = !files;
 
