@@ -161,17 +161,27 @@ export const NoteEditor: React.FC = () => {
       const [dataUrl, setDataUrl] = useState<string | null>(null);
       const [fallbackTried, setFallbackTried] = useState(false);
 
+      const srcForPath = useMemo(() => {
+          if (!rawSrc) return rawSrc;
+          if (/^(https?:|data:|blob:|tauri:|asset:)/i.test(rawSrc)) return rawSrc;
+          try {
+              return decodeURI(rawSrc);
+          } catch {
+              return rawSrc;
+          }
+      }, [rawSrc]);
+
       const absPath = useMemo(() => {
-          if (!rawSrc || !selectedFile) return null;
-          if (/^(https?:|data:|blob:|tauri:|asset:)/i.test(rawSrc)) return null;
+          if (!srcForPath || !selectedFile) return null;
+          if (/^(https?:|data:|blob:|tauri:|asset:)/i.test(srcForPath)) return null;
           const workspacePath = currentPathRef.current;
-          if (rawSrc.startsWith('/.xnote_assets/')) {
-              return workspacePath ? `${workspacePath}${rawSrc}` : null;
+          if (srcForPath.startsWith('/.xnote_assets/')) {
+              return workspacePath ? `${workspacePath}${srcForPath}` : null;
           }
           const baseDir = getDirname(selectedFile.path as string);
-          const normalizedSrc = rawSrc.replace(/^\.\/+/, '');
-          return rawSrc.startsWith('/') ? rawSrc : normalizeJoin(baseDir, normalizedSrc);
-      }, [rawSrc, selectedFile]);
+          const normalizedSrc = srcForPath.replace(/^\.\/+/, '');
+          return srcForPath.startsWith('/') ? srcForPath : normalizeJoin(baseDir, normalizedSrc);
+      }, [srcForPath, selectedFile]);
 
       const displaySrc = useMemo(() => {
           if (!rawSrc) return undefined;
@@ -179,7 +189,7 @@ export const NoteEditor: React.FC = () => {
           if (!isTauri) return rawSrc;
           if (/^(https?:|data:|blob:|tauri:|asset:)/i.test(rawSrc)) return rawSrc;
           if (!absPath) return rawSrc;
-          return convertFileSrc(absPath);
+          return encodeURI(convertFileSrc(absPath));
       }, [rawSrc, dataUrl, absPath]);
 
       const onError = async () => {
