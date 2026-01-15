@@ -6,13 +6,14 @@ import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import { useAppStore } from '../store';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
-import { Columns, Maximize, Eye, Table } from 'lucide-react';
+import { Columns, Maximize, Eye, Table, Terminal } from 'lucide-react';
 import { clsx } from 'clsx';
 import 'highlight.js/styles/github-dark.css'; // or atom-one-dark
 // @ts-ignore
 import plantumlEncoder from 'plantuml-encoder';
 import { MermaidDiagram } from './MermaidDiagram';
 import { prepareMarkdownForPreview } from '../utils/markdownExtensions';
+import { openExternalUrl } from '../utils/openExternalUrl';
 
 const getCodeText = (children: any) => {
   if (typeof children === 'string') return children;
@@ -30,7 +31,8 @@ const hashString = (input: string) => {
 };
 
 export const NoteEditor: React.FC = () => {
-  const { selectedFile, editorMode, setEditorMode, currentPath, searchJump, setSearchJump } = useAppStore();
+  const { selectedFile, editorMode, setEditorMode, currentPath, searchJump, setSearchJump, panelOpen, togglePanel } =
+    useAppStore();
   const [content, setContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const editorRef = useRef<any>(null);
@@ -216,6 +218,28 @@ export const NoteEditor: React.FC = () => {
     const fileKey = selectedFile?.path ? String(selectedFile.path) : 'unknown';
     return {
       img: MarkdownImage,
+      a({ href, children, ...props }: any) {
+        const url = typeof href === 'string' ? href : '';
+        return (
+          <a
+            {...props}
+            href={url}
+            onClick={async (e) => {
+              if (!url) return;
+              if (url.startsWith('#')) return;
+              e.preventDefault();
+              e.stopPropagation();
+              try {
+                await openExternalUrl(url);
+              } catch {
+              }
+            }}
+            className={clsx('text-accent underline underline-offset-2', props?.className)}
+          >
+            {children}
+          </a>
+        );
+      },
       code({ node, inline, className, children, ...props }: any) {
         const match = /language-(\w+)/.exec(className || '');
         const lang = match ? match[1] : '';
@@ -448,6 +472,13 @@ class Duck {
                 title="Preview Mode"
               >
                   <Eye size={16} />
+              </button>
+              <button
+                onClick={() => togglePanel()}
+                className={clsx("p-1.5 rounded hover:bg-surfaceHighlight", panelOpen && "bg-surfaceHighlight text-accent")}
+                title="Terminal"
+              >
+                <Terminal size={16} />
               </button>
           </div>
       </div>

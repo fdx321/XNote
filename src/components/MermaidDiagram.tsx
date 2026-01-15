@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ZoomIn, ZoomOut, RotateCcw, Copy } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+import { openExternalUrl } from '../utils/openExternalUrl';
 
 type MermaidDiagramProps = {
   code: string;
@@ -618,6 +619,9 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, diagramKey
   const onPointerDown = (e: React.PointerEvent) => {
     const viewport = viewportRef.current;
     if (!viewport) return;
+    const target = e.target as Element | null;
+    const anchor = target?.closest?.('a');
+    if (anchor) return;
     dragRef.current = {
       active: true,
       pointerId: e.pointerId,
@@ -735,6 +739,22 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({ code, diagramKey
       <div
         ref={viewportRef}
         className="relative overflow-hidden p-4 select-none"
+        onClickCapture={(e) => {
+          const target = e.target as Element | null;
+          const anchor = target?.closest?.('a') as SVGAElement | HTMLAnchorElement | null;
+          if (!anchor) return;
+          const raw =
+            (anchor as any).href?.baseVal ??
+            (anchor as any).getAttribute?.('href') ??
+            (anchor as any).getAttribute?.('xlink:href') ??
+            (anchor as any).href ??
+            '';
+          const url = typeof raw === 'string' ? raw : String(raw || '');
+          if (!url || url.startsWith('#')) return;
+          e.preventDefault();
+          e.stopPropagation();
+          openExternalUrl(url);
+        }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

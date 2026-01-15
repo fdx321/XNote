@@ -28,6 +28,10 @@ interface AppState {
   viewMode: 'tree' | 'card'; // 'tree' is standard sidebar+editor, 'card' is folder view
   viewPath: string | null; // The path currently being viewed in Card Mode
   sidebarWidth: number;
+  panelOpen: boolean;
+  panelHeight: number;
+  terminalTabs: Array<{ id: string; cwd: string; title: string }>;
+  activeTerminalTabId: string | null;
   searchJump: { path: string; line: number } | null;
   searchShortcut: string;
   closeEditorShortcut: string;
@@ -42,6 +46,12 @@ interface AppState {
   setViewMode: (mode: 'tree' | 'card') => void;
   setViewPath: (path: string | null) => void;
   setSidebarWidth: (width: number) => void;
+  setPanelOpen: (open: boolean) => void;
+  togglePanel: () => void;
+  setPanelHeight: (height: number) => void;
+  createTerminalTab: (cwd: string) => string;
+  closeTerminalTab: (id: string) => void;
+  setActiveTerminalTabId: (id: string) => void;
   setSearchJump: (jump: { path: string; line: number } | null) => void;
   setSearchShortcut: (shortcut: string) => void;
   setCloseEditorShortcut: (shortcut: string) => void;
@@ -65,6 +75,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   viewMode: 'tree',
   viewPath: null,
   sidebarWidth: 256,
+  panelOpen: false,
+  panelHeight: 260,
+  terminalTabs: [],
+  activeTerminalTabId: null,
   searchJump: null,
   searchShortcut: 'Cmd+G',
   closeEditorShortcut: 'Cmd+W',
@@ -84,6 +98,37 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ sidebarWidth: width });
       get().saveConfig();
   },
+  setPanelOpen: (open) => set({ panelOpen: open }),
+  togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
+  setPanelHeight: (height) => set({ panelHeight: height }),
+  createTerminalTab: (cwd) => {
+      const id = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      const segments = (cwd || '').split('/').filter(Boolean);
+      const title = segments.length > 0 ? segments[segments.length - 1] : 'Terminal';
+      const next = { id, cwd, title };
+      set((s) => ({
+          panelOpen: true,
+          terminalTabs: [...s.terminalTabs, next],
+          activeTerminalTabId: id
+      }));
+      return id;
+  },
+  closeTerminalTab: (id) => {
+      set((s) => {
+          const idx = s.terminalTabs.findIndex((t) => t.id === id);
+          if (idx < 0) return s;
+          const nextTabs = s.terminalTabs.filter((t) => t.id !== id);
+          const nextActive =
+              s.activeTerminalTabId === id
+                  ? (nextTabs[Math.max(0, idx - 1)]?.id ?? nextTabs[0]?.id ?? null)
+                  : s.activeTerminalTabId;
+          return {
+              terminalTabs: nextTabs,
+              activeTerminalTabId: nextActive
+          };
+      });
+  },
+  setActiveTerminalTabId: (id) => set({ activeTerminalTabId: id }),
   setSearchJump: (jump) => set({ searchJump: jump }),
   setSearchShortcut: (shortcut) => {
       set({ searchShortcut: shortcut });

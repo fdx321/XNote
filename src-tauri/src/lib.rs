@@ -455,7 +455,6 @@ struct CleanTaskController {
     job_id: u64,
     cancel: bool,
 }
-
 static CLEAN_TASK: OnceLock<Mutex<CleanTaskController>> = OnceLock::new();
 
 fn clean_task() -> &'static Mutex<CleanTaskController> {
