@@ -3,6 +3,9 @@
 XNote 是一款 macOS 本地优先（Local-first）的 Markdown/PlantUML 笔记应用，基于 Tauri + React + TypeScript。
 <img width="1376" height="768" alt="image" src="https://github.com/user-attachments/assets/a842f387-ef00-4320-92cb-945ddfea5443" />
 
+<img width="3834" height="2094" alt="image" src="https://github.com/user-attachments/assets/961a5b49-72fa-4c84-ab9a-3b06ecba5683" />
+
+
 
 ## 功能
 
