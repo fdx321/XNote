@@ -47,7 +47,7 @@ export const NoteEditor: React.FC = () => {
 
   useEffect(() => {
       if (!editorInstance) return;
-      const disposable = editorInstance.onDidChangeCursorSelection((e: any) => {
+      const disposable = editorInstance.onDidChangeCursorSelection(() => {
           const selection = editorInstance.getSelection();
           if (selection && !selection.isEmpty()) {
               const model = editorInstance.getModel();

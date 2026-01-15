@@ -84,12 +84,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShor
     setActiveTab('general');
   }, [isOpen, searchShortcut, closeEditorShortcut, theme, llmConfigs, activeLLMConfigId, systemPrompts, activeSystemPromptId]);
 
-  const displayKey = useMemo(() => {
+  useMemo(() => {
     const v = value || 'Cmd+G';
     return formatShortcutSymbols(v);
   }, [value]);
 
-  const displayCloseKey = useMemo(() => {
+  useMemo(() => {
     const v = closeValue || 'Cmd+W';
     return formatShortcutSymbols(v);
   }, [closeValue]);

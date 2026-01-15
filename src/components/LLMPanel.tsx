@@ -3,7 +3,7 @@ import { useAppStore } from '../store';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeHighlight from 'rehype-highlight';
-import { X, Send, Copy, Bot, User, Eraser, Settings } from 'lucide-react';
+import { X, Send, Copy, Bot, User, Eraser } from 'lucide-react';
 import { clsx } from 'clsx';
 import { chatWithLLM } from '../utils/llm';
 
