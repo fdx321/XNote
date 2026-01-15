@@ -14,6 +14,30 @@ export type NoticeType = 'info' | 'success' | 'error';
 
 export type AppTheme = 'zinc' | 'midnight' | 'grape';
 
+export interface LLMConfig {
+  id: string;
+  name: string;
+  provider: 'openai' | 'ollama' | 'custom';
+  baseUrl: string;
+  apiKey: string;
+  modelId: string;
+  type?: 'text' | 'image' | 'video';
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: number;
+}
+
+
+export interface SystemPrompt {
+  id: string;
+  name: string;
+  content: string;
+}
+
 const applyTheme = (theme: AppTheme) => {
   if (typeof document === 'undefined') return;
   document.documentElement.dataset.theme = theme;
@@ -28,15 +52,21 @@ interface AppState {
   viewMode: 'tree' | 'card'; // 'tree' is standard sidebar+editor, 'card' is folder view
   viewPath: string | null; // The path currently being viewed in Card Mode
   sidebarWidth: number;
-  panelOpen: boolean;
-  panelHeight: number;
-  terminalTabs: Array<{ id: string; cwd: string; title: string }>;
-  activeTerminalTabId: string | null;
   searchJump: { path: string; line: number } | null;
   searchShortcut: string;
   closeEditorShortcut: string;
   theme: AppTheme;
   notice: { id: number; type: NoticeType; message: string } | null;
+
+  // LLM State
+  llmConfigs: LLMConfig[];
+  activeLLMConfigId: string | null;
+  llmPanelOpen: boolean;
+  llmPanelWidth: number;
+  chatHistory: ChatMessage[];
+  chatInput: string;
+  systemPrompts: SystemPrompt[];
+  activeSystemPromptId: string | null;
 
   // Actions
   setFiles: (files: FileNode[]) => void;
@@ -46,18 +76,23 @@ interface AppState {
   setViewMode: (mode: 'tree' | 'card') => void;
   setViewPath: (path: string | null) => void;
   setSidebarWidth: (width: number) => void;
-  setPanelOpen: (open: boolean) => void;
-  togglePanel: () => void;
-  setPanelHeight: (height: number) => void;
-  createTerminalTab: (cwd: string) => string;
-  closeTerminalTab: (id: string) => void;
-  setActiveTerminalTabId: (id: string) => void;
   setSearchJump: (jump: { path: string; line: number } | null) => void;
   setSearchShortcut: (shortcut: string) => void;
   setCloseEditorShortcut: (shortcut: string) => void;
   setTheme: (theme: AppTheme) => void;
   pushNotice: (message: string, type?: NoticeType) => void;
   clearNotice: () => void;
+  setLLMConfigs: (configs: LLMConfig[]) => void;
+  setActiveLLMConfigId: (id: string | null) => void;
+  setLLMPanelOpen: (open: boolean) => void;
+  toggleLLMPanel: () => void;
+  setLLMPanelWidth: (width: number) => void;
+  addChatMessage: (message: ChatMessage) => void;
+  clearChatHistory: () => void;
+  updateChatMessage: (id: string, content: string) => void;
+  setChatInput: (input: string) => void;
+  setSystemPrompts: (prompts: SystemPrompt[]) => void;
+  setActiveSystemPromptId: (id: string | null) => void;
   loadFiles: (path: string) => Promise<void>;
   moveFile: (source: string, target: string) => Promise<void>;
   renameFile: (path: string, newName: string) => Promise<void>;
@@ -75,15 +110,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   viewMode: 'tree',
   viewPath: null,
   sidebarWidth: 256,
-  panelOpen: false,
-  panelHeight: 260,
-  terminalTabs: [],
-  activeTerminalTabId: null,
   searchJump: null,
   searchShortcut: 'Cmd+G',
   closeEditorShortcut: 'Cmd+W',
   theme: 'zinc',
   notice: null,
+  llmConfigs: [],
+  activeLLMConfigId: null,
+  llmPanelOpen: false,
+  llmPanelWidth: 256,
+  chatHistory: [],
+  chatInput: '',
+  systemPrompts: [],
+  activeSystemPromptId: null,
 
   setFiles: (files) => set({ files }),
   setCurrentPath: (path) => set({ currentPath: path }),
@@ -98,37 +137,6 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ sidebarWidth: width });
       get().saveConfig();
   },
-  setPanelOpen: (open) => set({ panelOpen: open }),
-  togglePanel: () => set((s) => ({ panelOpen: !s.panelOpen })),
-  setPanelHeight: (height) => set({ panelHeight: height }),
-  createTerminalTab: (cwd) => {
-      const id = `${Date.now()}_${Math.random().toString(16).slice(2)}`;
-      const segments = (cwd || '').split('/').filter(Boolean);
-      const title = segments.length > 0 ? segments[segments.length - 1] : 'Terminal';
-      const next = { id, cwd, title };
-      set((s) => ({
-          panelOpen: true,
-          terminalTabs: [...s.terminalTabs, next],
-          activeTerminalTabId: id
-      }));
-      return id;
-  },
-  closeTerminalTab: (id) => {
-      set((s) => {
-          const idx = s.terminalTabs.findIndex((t) => t.id === id);
-          if (idx < 0) return s;
-          const nextTabs = s.terminalTabs.filter((t) => t.id !== id);
-          const nextActive =
-              s.activeTerminalTabId === id
-                  ? (nextTabs[Math.max(0, idx - 1)]?.id ?? nextTabs[0]?.id ?? null)
-                  : s.activeTerminalTabId;
-          return {
-              terminalTabs: nextTabs,
-              activeTerminalTabId: nextActive
-          };
-      });
-  },
-  setActiveTerminalTabId: (id) => set({ activeTerminalTabId: id }),
   setSearchJump: (jump) => set({ searchJump: jump }),
   setSearchShortcut: (shortcut) => {
       set({ searchShortcut: shortcut });
@@ -145,6 +153,34 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   pushNotice: (message, type = 'info') => set({ notice: { id: Date.now(), type, message } }),
   clearNotice: () => set({ notice: null }),
+  setLLMConfigs: (configs) => {
+    set({ llmConfigs: configs });
+    get().saveConfig();
+  },
+  setActiveLLMConfigId: (id) => {
+    set({ activeLLMConfigId: id });
+    get().saveConfig();
+  },
+  setLLMPanelOpen: (open) => set({ llmPanelOpen: open }),
+  toggleLLMPanel: () => set((s) => ({ llmPanelOpen: !s.llmPanelOpen })),
+  setLLMPanelWidth: (width) => {
+    set({ llmPanelWidth: width });
+    get().saveConfig();
+  },
+  addChatMessage: (message) => set((s) => ({ chatHistory: [...s.chatHistory, message] })),
+  clearChatHistory: () => set({ chatHistory: [] }),
+  updateChatMessage: (id, content) => set((s) => ({
+    chatHistory: s.chatHistory.map(m => m.id === id ? { ...m, content } : m)
+  })),
+  setChatInput: (input) => set({ chatInput: input }),
+  setSystemPrompts: (prompts) => {
+    set({ systemPrompts: prompts });
+    get().saveConfig();
+  },
+  setActiveSystemPromptId: (id) => {
+    set({ activeSystemPromptId: id });
+    get().saveConfig();
+  },
   
   loadConfig: async () => {
       try {
@@ -159,7 +195,12 @@ export const useAppStore = create<AppState>((set, get) => ({
                       editorMode: config.editorMode ?? 'split',
                       searchShortcut: config.shortcuts?.search ?? 'Cmd+G',
                       closeEditorShortcut: config.shortcuts?.closeEditor ?? config.shortcuts?.close ?? 'Cmd+W',
-                      theme
+                      theme,
+                      llmConfigs: config.llm?.configs ?? [],
+                      activeLLMConfigId: config.llm?.activeId ?? null,
+                      llmPanelWidth: config.llm?.panelWidth ?? 300,
+                      systemPrompts: config.llm?.systemPrompts ?? [],
+                      activeSystemPromptId: config.llm?.activeSystemPromptId ?? null
                   });
                   applyTheme(theme);
               }
@@ -170,7 +211,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   saveConfig: async () => {
-      const { sidebarWidth, editorMode, searchShortcut, closeEditorShortcut, theme } = get();
+      const { sidebarWidth, editorMode, searchShortcut, closeEditorShortcut, theme, llmConfigs, activeLLMConfigId, llmPanelWidth, systemPrompts, activeSystemPromptId } = get();
       try {
           // @ts-ignore
           if (window.__TAURI_INTERNALS__) {
@@ -181,6 +222,13 @@ export const useAppStore = create<AppState>((set, get) => ({
                   shortcuts: {
                       search: searchShortcut,
                       closeEditor: closeEditorShortcut
+                  },
+                  llm: {
+                      configs: llmConfigs,
+                      activeId: activeLLMConfigId,
+                      panelWidth: llmPanelWidth,
+                      systemPrompts,
+                      activeSystemPromptId
                   }
               };
               await invoke('save_config', { config: JSON.stringify(config) });

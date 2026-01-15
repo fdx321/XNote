@@ -6,7 +6,7 @@ import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import { useAppStore } from '../store';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
-import { Columns, Maximize, Eye, Table, Terminal } from 'lucide-react';
+import { Columns, Maximize, Eye, Table, Sparkles } from 'lucide-react';
 import { clsx } from 'clsx';
 import 'highlight.js/styles/github-dark.css'; // or atom-one-dark
 // @ts-ignore
@@ -31,7 +31,7 @@ const hashString = (input: string) => {
 };
 
 export const NoteEditor: React.FC = () => {
-  const { selectedFile, editorMode, setEditorMode, currentPath, searchJump, setSearchJump, panelOpen, togglePanel } =
+  const { selectedFile, editorMode, setEditorMode, currentPath, searchJump, setSearchJump, setLLMPanelOpen, llmPanelOpen, setChatInput } =
     useAppStore();
   const [content, setContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -43,6 +43,41 @@ export const NoteEditor: React.FC = () => {
   const isTauri = (window as any).__TAURI_INTERNALS__;
   const selectedFileRef = useRef<typeof selectedFile | null>(null);
   const currentPathRef = useRef<string>('');
+  const [selectionWidget, setSelectionWidget] = useState<{ x: number; y: number; text: string } | null>(null);
+
+  useEffect(() => {
+      if (!editorInstance) return;
+      const disposable = editorInstance.onDidChangeCursorSelection((e: any) => {
+          const selection = editorInstance.getSelection();
+          if (selection && !selection.isEmpty()) {
+              const model = editorInstance.getModel();
+              const text = model?.getValueInRange(selection) || '';
+              if (text.trim()) {
+                  const endPos = selection.getEndPosition();
+                  const coords = editorInstance.getScrolledVisiblePosition(endPos);
+                  const domNode = editorInstance.getDomNode();
+                  if (coords && domNode) {
+                      const rect = domNode.getBoundingClientRect();
+                      setSelectionWidget({
+                          x: rect.left + coords.left,
+                          y: rect.top + coords.top,
+                          text
+                      });
+                      return;
+                  }
+              }
+          }
+          setSelectionWidget(null);
+      });
+      return () => disposable.dispose();
+  }, [editorInstance]);
+
+  const handleAddToChat = () => {
+      if (!selectionWidget) return;
+      setChatInput(selectionWidget.text);
+      setLLMPanelOpen(true);
+      setSelectionWidget(null);
+  };
 
   useEffect(() => {
       selectedFileRef.current = selectedFile ?? null;
@@ -473,12 +508,12 @@ class Duck {
               >
                   <Eye size={16} />
               </button>
-              <button
-                onClick={() => togglePanel()}
-                className={clsx("p-1.5 rounded hover:bg-surfaceHighlight", panelOpen && "bg-surfaceHighlight text-accent")}
-                title="Terminal"
+              <button 
+                onClick={() => setLLMPanelOpen(!llmPanelOpen)}
+                className={clsx("p-1.5 rounded hover:bg-surfaceHighlight", llmPanelOpen && "bg-surfaceHighlight text-accent")}
+                title="AI Chat"
               >
-                <Terminal size={16} />
+                  <Sparkles size={16} />
               </button>
           </div>
       </div>
@@ -547,6 +582,26 @@ class Duck {
               </div>
           )}
       </div>
+
+      {selectionWidget && (
+          <div 
+              style={{ 
+                  position: 'fixed', 
+                  top: selectionWidget.y - 40, 
+                  left: selectionWidget.x, 
+                  zIndex: 50 
+              }}
+              className="bg-surface border border-border shadow-lg rounded-lg p-1 animate-in fade-in zoom-in duration-200"
+          >
+              <button 
+                  onClick={handleAddToChat}
+                  className="flex items-center gap-2 px-2 py-1 text-xs font-medium text-text hover:bg-surfaceHighlight rounded"
+              >
+                  <Sparkles size={12} className="text-accent" />
+                  Add to Chat
+              </button>
+          </div>
+      )}
     </div>
   );
 };

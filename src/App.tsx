@@ -8,9 +8,10 @@ import { listen } from '@tauri-apps/api/event';
 import { SettingsModal } from './components/SettingsModal';
 import { CleanUnusedImagesModal } from './components/CleanUnusedImagesModal';
 import { Notice } from './components/Notice';
+import { LLMPanel } from './components/LLMPanel';
 
 function App() {
-  const { currentPath, viewMode, selectedFile, loadFiles, loadConfig, sidebarWidth, setSidebarWidth, searchShortcut, setSearchShortcut, closeEditorShortcut, setCloseEditorShortcut, theme, setTheme } = useAppStore();
+  const { currentPath, viewMode, selectedFile, loadFiles, loadConfig, sidebarWidth, setSidebarWidth, searchShortcut, setSearchShortcut, closeEditorShortcut, setCloseEditorShortcut, theme, setTheme, llmPanelOpen, llmPanelWidth, setLLMPanelWidth } = useAppStore();
   const [showAbout, setShowAbout] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [cleanProgress, setCleanProgress] = useState<{ message: string; current: number; total: number }>({
@@ -25,6 +26,7 @@ function App() {
   const [showCleanModal, setShowCleanModal] = useState(false);
   // Removed local sidebarWidth state
   const [isResizing, setIsResizing] = useState(false);
+  const [isResizingRight, setIsResizingRight] = useState(false);
 
   // Modal State - No longer used for switching workspace, but could be reused if needed. 
   // For now, removing the state related to input modal for workspace switch.
@@ -38,6 +40,15 @@ function App() {
     setIsResizing(false);
   }, []);
 
+  const startResizingRight = useCallback((mouseDownEvent: React.MouseEvent) => {
+    setIsResizingRight(true);
+    mouseDownEvent.preventDefault();
+  }, []);
+
+  const stopResizingRight = useCallback(() => {
+    setIsResizingRight(false);
+  }, []);
+
   const resize = useCallback(
     (mouseMoveEvent: MouseEvent) => {
       if (isResizing) {
@@ -46,18 +57,26 @@ function App() {
             setSidebarWidth(newWidth);
         }
       }
+      if (isResizingRight) {
+        const newWidth = window.innerWidth - mouseMoveEvent.clientX;
+        if (newWidth > 200 && newWidth < 800) {
+            setLLMPanelWidth(newWidth);
+        }
+      }
     },
-    [isResizing, setSidebarWidth]
+    [isResizing, setSidebarWidth, isResizingRight, setLLMPanelWidth]
   );
 
   useEffect(() => {
     window.addEventListener("mousemove", resize);
     window.addEventListener("mouseup", stopResizing);
+    window.addEventListener("mouseup", stopResizingRight);
     return () => {
       window.removeEventListener("mousemove", resize);
       window.removeEventListener("mouseup", stopResizing);
+      window.removeEventListener("mouseup", stopResizingRight);
     };
-  }, [resize, stopResizing]);
+  }, [resize, stopResizing, stopResizingRight]);
 
   useEffect(() => {
     let unlisten: () => void;
@@ -358,6 +377,18 @@ function App() {
             <NoteEditor />
         )}
         </div>
+
+        {llmPanelOpen && (
+          <>
+             <div 
+                  className="w-1 hover:bg-accent/50 cursor-col-resize active:bg-accent transition-colors"
+                  onMouseDown={startResizingRight}
+              />
+              <div className="flex-shrink-0" style={{ width: llmPanelWidth }}>
+                  <LLMPanel />
+              </div>
+          </>
+        )}
       </div>
 
       <div className="h-[22px] flex-shrink-0 flex items-center justify-between px-2 border-t border-border bg-surface/90 backdrop-blur-sm">
