@@ -156,6 +156,9 @@ fn create_terminal(
     }
     // Set some env vars if needed
     cmd.env("TERM", "xterm-256color");
+    cmd.env("LANG", "en_US.UTF-8");
+    cmd.env("LC_ALL", "en_US.UTF-8");
+    cmd.env("LC_CTYPE", "en_US.UTF-8");
 
     let _child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
 
