@@ -79,20 +79,6 @@ export const Sidebar: React.FC<SidebarProps> = () => {
   const [moveTargetNode, setMoveTargetNode] = useState<FileNode | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  const formatShortcutSymbols = (shortcut: string) => {
-      const parts = shortcut.split('+').filter(Boolean);
-      const out: string[] = [];
-      for (const p of parts) {
-          const k = p.toLowerCase();
-          if (k === 'cmd') out.push('⌘');
-          else if (k === 'ctrl') out.push('⌃');
-          else if (k === 'alt') out.push('⌥');
-          else if (k === 'shift') out.push('⇧');
-          else out.push(p.length === 1 ? p.toUpperCase() : p);
-      }
-      return out.join('');
-  };
-
   const normalizeMainKey = (key: string) => {
       if (!key) return '';
       if (key === ' ') return 'Space';
@@ -411,6 +397,16 @@ export const Sidebar: React.FC<SidebarProps> = () => {
         >
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-accent to-blue-400">XNote</span>
         </h2>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setSearchOpen(true)}
+            className="p-1.5 text-muted hover:text-text hover:bg-surfaceHighlight rounded"
+            title={`Search (${searchShortcut || 'Cmd+G'})`}
+          >
+            <Search size={16} />
+          </button>
+        </div>
       </div>
       
       <div 
@@ -440,21 +436,6 @@ export const Sidebar: React.FC<SidebarProps> = () => {
                 ))}
             </>
         )}
-      </div>
-
-      <div className="p-3 border-t border-border bg-sidebar/50 backdrop-blur-sm sticky bottom-0 z-10 flex justify-start">
-        <button
-            type="button"
-            onClick={() => setSearchOpen(true)}
-            className="h-9 w-44 px-3 rounded-lg border border-border bg-background/30 hover:bg-surfaceHighlight transition-colors flex items-center gap-2 text-muted"
-            title={`Search (${searchShortcut || 'Cmd+G'})`}
-        >
-            <Search size={14} className="opacity-80" />
-            <span className="text-sm flex-1 text-left opacity-90">Search</span>
-            <span className="text-xs border border-border rounded px-2 py-0.5 opacity-80">
-              {formatShortcutSymbols(searchShortcut || 'Cmd+G')}
-            </span>
-        </button>
       </div>
 
       {/* Context Menu */}
