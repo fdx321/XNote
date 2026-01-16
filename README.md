@@ -40,6 +40,13 @@ XNote 是一款 macOS 本地优先（Local-first）的 Markdown/PlantUML 笔记�
 - 右键菜单：将选中文本发送到聊天
 - 聊天历史持久化
 
+### 💻 集成终端
+- 底部终端面板：基于 xterm.js
+- PTY 支持：使用 portable-pty 集成系统 Shell
+- 快捷键切换：一键显示/隐藏终端
+- 自动适应：终端大小随面板调整
+- 会话管理：支持创建、写入、调整大小、关闭
+
 ### ⚙️ 设置与定制
 - **主题切换**：三种深色主题（Zinc、Midnight、Grape）
 - **快捷键配置**：自定义所有键盘快捷键
@@ -58,6 +65,7 @@ XNote 是一款 macOS 本地优先（Local-first）的 Markdown/PlantUML 笔记�
 | 打开搜索 | `Cmd+G` | ✅ |
 | 切换侧边栏 | `Cmd+1` | ✅ |
 | 切换 AI 聊天面板 | `Cmd+2` | ✅ |
+| 切换终端面板 | `Cmd+3` | ✅ |
 | 关闭编辑器 | `Cmd+W` | ✅ |
 | 关闭弹窗 | `Esc` | ❌ |
 
@@ -88,7 +96,8 @@ XNote 是一款 macOS 本地优先（Local-first）的 Markdown/PlantUML 笔记�
     "search": "Cmd+G",
     "sidebar": "Cmd+1",
     "closeEditor": "Cmd+W",
-    "llmPanel": "Cmd+2"
+    "llmPanel": "Cmd+2",
+    "terminal": "Cmd+3"
   },
   "llm": {
     "configs": [
@@ -105,6 +114,9 @@ XNote 是一款 macOS 本地优先（Local-first）的 Markdown/PlantUML 笔记�
     "panelWidth": 300,
     "systemPrompts": [],
     "activeSystemPromptId": null
+  },
+  "terminal": {
+    "height": 300
   }
 }
 ```
@@ -119,10 +131,14 @@ XNote 是一款 macOS 本地优先（Local-first）的 Markdown/PlantUML 笔记�
 - react-markdown（Markdown 渲染）
 - Mermaid（图表渲染）
 - @dnd-kit（拖拽）
+- xterm.js（终端模拟）
+- @xterm/addon-fit（终端自适应）
+- @xterm/addon-web-links（Web 链接）
 
 ### 后端
 - Tauri（桌面应用框架）
 - Rust（系统调用）
+- portable-pty（伪终端）
 
 ## 开发
 
@@ -164,6 +180,7 @@ XNote/
 │   │   ├── Editor.tsx     # 编辑器
 │   │   ├── Sidebar.tsx    # 文件树
 │   │   ├── LLMPanel.tsx   # AI 聊天面板
+│   │   ├── TerminalPanel.tsx # 终端面板
 │   │   └── ...
 │   ├── store/             # Zustand 状态管理
 │   ├── utils/             # 工具函数
