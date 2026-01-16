@@ -7,7 +7,8 @@ XNote 是一款 macOS 本地优先（Local-first）的 Markdown/PlantUML 笔记�
 <img width="1376" height="768" alt="image" src="https://github.com/user-attachments/assets/09ec72f1-f917-4ff0-a61f-422f4da6c19c" />
 
 
-<img width="3834" height="2094" alt="XNote 功能概览" src="https://github.com/user-attachments/assets/961a5b49-72fa-4c84-ab9a-3b06ecba5683" />
+<img width="3454" height="2170" alt="image" src="https://github.com/user-attachments/assets/d8487cfb-ce5e-477c-8a02-104cd5d5eff8" />
+
 
 ## 功能
 
