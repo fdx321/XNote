@@ -9,6 +9,8 @@ import { SettingsModal } from './components/SettingsModal';
 import { CleanUnusedImagesModal } from './components/CleanUnusedImagesModal';
 import { Notice } from './components/Notice';
 import { LLMPanel } from './components/LLMPanel';
+import { TerminalPanel } from './components/TerminalPanel';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 const normalizeMainKey = (key: string) => {
   if (!key) return '';
@@ -30,7 +32,7 @@ const buildShortcutString = (e: KeyboardEvent) => {
 };
 
 function App() {
-  const { currentPath, viewMode, selectedFile, loadFiles, loadConfig, sidebarWidth, setSidebarWidth, sidebarOpen, toggleSidebar, sidebarShortcut, setSidebarShortcut, searchShortcut, setSearchShortcut, closeEditorShortcut, setCloseEditorShortcut, llmPanelShortcut, setLLMPanelShortcut, theme, setTheme, llmPanelOpen, toggleLLMPanel, llmPanelWidth, setLLMPanelWidth } = useAppStore();
+  const { currentPath, viewMode, selectedFile, loadFiles, loadConfig, sidebarWidth, setSidebarWidth, sidebarOpen, toggleSidebar, sidebarShortcut, setSidebarShortcut, searchShortcut, setSearchShortcut, closeEditorShortcut, setCloseEditorShortcut, llmPanelShortcut, setLLMPanelShortcut, terminalShortcut, setTerminalShortcut, theme, setTheme, llmPanelOpen, toggleLLMPanel, llmPanelWidth, setLLMPanelWidth, terminalOpen, toggleTerminal, setSelectedFile, setViewMode, setViewPath } = useAppStore();
   const [showAbout, setShowAbout] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [cleanProgress, setCleanProgress] = useState<{ message: string; current: number; total: number }>({
@@ -101,18 +103,43 @@ function App() {
     const handler = (e: KeyboardEvent) => {
       const current = buildShortcutString(e);
       if (!current) return;
+      if (current === (closeEditorShortcut || 'Cmd+W')) {
+        const activeEl = document.activeElement as HTMLElement | null;
+        const isInTerminal = !!activeEl?.closest?.('#xnote-terminal-panel');
+        const isInEditor = !!activeEl?.closest?.('.monaco-editor');
 
+        if (isInTerminal) {
+          e.preventDefault();
+          window.dispatchEvent(new CustomEvent('xnote-terminal-close-active-session'));
+          return;
+        }
+
+        if (isInEditor || (selectedFile && !(selectedFile as any).is_dir)) {
+          if (!selectedFile || (selectedFile as any).is_dir) return;
+          e.preventDefault();
+          const p = String((selectedFile as any).path || '');
+          const idx = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
+          const parent = idx > 0 ? p.slice(0, idx) : (currentPath || '');
+          setViewMode('card');
+          setViewPath(parent || currentPath || null);
+          setSelectedFile(null);
+          return;
+        }
+      }
       if (current === (sidebarShortcut || 'Cmd+1')) {
         e.preventDefault();
         toggleSidebar();
       } else if (current === (llmPanelShortcut || 'Cmd+2')) {
         e.preventDefault();
         toggleLLMPanel();
+      } else if (current === (terminalShortcut || 'Cmd+3')) {
+        e.preventDefault();
+        toggleTerminal();
       }
     };
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [sidebarShortcut, llmPanelShortcut, toggleSidebar, toggleLLMPanel]);
+  }, [closeEditorShortcut, currentPath, llmPanelShortcut, selectedFile, setSelectedFile, setViewMode, setViewPath, sidebarShortcut, terminalShortcut, toggleLLMPanel, toggleSidebar, toggleTerminal]);
 
   useEffect(() => {
     let unlisten: () => void;
@@ -275,7 +302,8 @@ function App() {
   const activeFilePath = selectedFile && !(selectedFile as any).is_dir ? String((selectedFile as any).path || '') : '';
 
   return (
-    <div className="app-container flex flex-col h-screen w-screen bg-background text-text overflow-hidden" style={{ cursor: isResizing ? 'col-resize' : 'auto' }}>
+    <div className="app-container flex flex-col h-screen w-screen bg-background text-text overflow-hidden relative" style={{ cursor: isResizing ? 'col-resize' : 'auto' }}>
+      
       <Notice />
       <div className="app-main-row flex flex-row flex-1 min-h-0 overflow-hidden">
         {currentPath && sidebarOpen && (
@@ -367,6 +395,7 @@ function App() {
         sidebarShortcut={sidebarShortcut}
         closeEditorShortcut={closeEditorShortcut}
         llmPanelShortcut={llmPanelShortcut}
+        terminalShortcut={terminalShortcut}
         theme={theme}
         onClose={() => setShowSettings(false)}
         onSave={(next) => {
@@ -375,6 +404,7 @@ function App() {
           setSidebarShortcut(next.sidebarShortcut);
           setCloseEditorShortcut(next.closeEditorShortcut);
           setLLMPanelShortcut(next.llmPanelShortcut);
+          setTerminalShortcut(next.terminalShortcut);
         }}
       />
 
@@ -409,13 +439,15 @@ function App() {
             </div>
         )}
 
-        {!currentPath ? (
-             <Dashboard />
-        ) : viewMode === 'card' && !selectedFile ? (
-            <Dashboard />
-        ) : (
-            <NoteEditor />
-        )}
+        <ErrorBoundary>
+          {!currentPath ? (
+               <Dashboard />
+          ) : viewMode === 'card' && !selectedFile ? (
+              <Dashboard />
+          ) : (
+              <NoteEditor />
+          )}
+        </ErrorBoundary>
         </div>
 
         {llmPanelOpen && (
@@ -430,6 +462,10 @@ function App() {
           </>
         )}
       </div>
+
+      <ErrorBoundary>
+        <TerminalPanel isOpen={terminalOpen} />
+      </ErrorBoundary>
 
       <div className="h-[22px] flex-shrink-0 flex items-center justify-between px-2 border-t border-border bg-surface/90 backdrop-blur-sm">
         <div className="text-[10px] text-muted truncate max-w-[70%] font-mono">{activeFilePath}</div>

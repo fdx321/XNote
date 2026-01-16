@@ -187,7 +187,7 @@ export const LLMPanel: React.FC = () => {
       </div>
 
       {/* Input */}
-      <div className="p-4 border-t border-border bg-background/50">
+      <div className="p-3 border-t border-border bg-background/50">
           <div className="relative">
               <textarea
                   ref={textareaRef}
@@ -195,14 +195,14 @@ export const LLMPanel: React.FC = () => {
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Ask anything..."
-                  className="w-full bg-surface border border-border rounded-xl pl-4 pr-10 py-3 text-sm outline-none focus:border-accent min-h-[44px] max-h-[200px] resize-none"
+                  className="w-full bg-surface border border-border rounded-xl pl-3 pr-10 py-2 text-sm outline-none focus:border-accent min-h-[36px] max-h-[200px] resize-none"
                   rows={1}
-                  style={{ height: 'auto', minHeight: '44px' }} 
+                  style={{ height: 'auto', minHeight: '36px' }} 
               />
               <button 
                   onClick={handleSend}
                   disabled={!chatInput.trim() || isSending}
-                  className={clsx("absolute right-2 bottom-1.5 h-8 w-8 flex items-center justify-center rounded-lg transition-colors", 
+                  className={clsx("absolute right-1.5 bottom-1 h-7 w-7 flex items-center justify-center rounded-lg transition-colors", 
                       chatInput.trim() && !isSending ? "bg-accent text-white hover:opacity-90" : "text-muted bg-transparent cursor-not-allowed")}
               >
                   <Send size={14} />

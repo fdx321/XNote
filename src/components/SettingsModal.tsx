@@ -42,9 +42,10 @@ interface SettingsModalProps {
   sidebarShortcut: string;
   closeEditorShortcut: string;
   llmPanelShortcut: string;
+  terminalShortcut: string;
   theme: AppTheme;
   onClose: () => void;
-  onSave: (next: { searchShortcut: string; sidebarShortcut: string; closeEditorShortcut: string; llmPanelShortcut: string; theme: AppTheme }) => void;
+  onSave: (next: { searchShortcut: string; sidebarShortcut: string; closeEditorShortcut: string; llmPanelShortcut: string; terminalShortcut: string; theme: AppTheme }) => void;
 }
 
 const THEME_OPTIONS: Array<{ value: AppTheme; label: string; hint: string }> = [
@@ -53,7 +54,7 @@ const THEME_OPTIONS: Array<{ value: AppTheme; label: string; hint: string }> = [
   { value: 'grape', label: 'Grape', hint: 'Purple-tinted dark' },
 ];
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShortcut, sidebarShortcut, closeEditorShortcut, llmPanelShortcut, theme, onClose, onSave }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShortcut, sidebarShortcut, closeEditorShortcut, llmPanelShortcut, terminalShortcut, theme, onClose, onSave }) => {
   const { llmConfigs, activeLLMConfigId, setLLMConfigs, setActiveLLMConfigId, systemPrompts, activeSystemPromptId, setSystemPrompts, setActiveSystemPromptId } = useAppStore();
   const [activeTab, setActiveTab] = useState<'general' | 'shortcuts' | 'llm' | 'prompts'>('general');
 
@@ -61,11 +62,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShor
   const [sidebarVal, setSidebarVal] = useState(sidebarShortcut || 'Cmd+1');
   const [closeValue, setCloseValue] = useState(closeEditorShortcut || 'Cmd+W');
   const [llmVal, setLlmVal] = useState(llmPanelShortcut || 'Cmd+2');
+  const [terminalVal, setTerminalVal] = useState(terminalShortcut || 'Cmd+3');
 
   const [isRecording, setIsRecording] = useState(false);
   const [isRecordingSidebar, setIsRecordingSidebar] = useState(false);
   const [isRecordingClose, setIsRecordingClose] = useState(false);
   const [isRecordingLLM, setIsRecordingLLM] = useState(false);
+  const [isRecordingTerminal, setIsRecordingTerminal] = useState(false);
 
   const [themeValue, setThemeValue] = useState<AppTheme>(theme || 'zinc');
   
@@ -79,6 +82,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShor
   const sidebarInputRef = useRef<HTMLInputElement>(null);
   const closeInputRef = useRef<HTMLInputElement>(null);
   const llmInputRef = useRef<HTMLInputElement>(null);
+  const terminalInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -86,11 +90,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShor
     setSidebarVal(sidebarShortcut || 'Cmd+1');
     setCloseValue(closeEditorShortcut || 'Cmd+W');
     setLlmVal(llmPanelShortcut || 'Cmd+2');
+    setTerminalVal(terminalShortcut || 'Cmd+3');
     
     setIsRecording(false);
     setIsRecordingSidebar(false);
     setIsRecordingClose(false);
     setIsRecordingLLM(false);
+    setIsRecordingTerminal(false);
 
     setThemeValue(theme || 'zinc');
     setLocalConfigs(JSON.parse(JSON.stringify(llmConfigs)));
@@ -162,6 +168,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShor
     return () => window.removeEventListener('keydown', handler, true);
   }, [isOpen, isRecordingLLM]);
 
+  useEffect(() => {
+    if (!isOpen || !isRecordingTerminal) return;
+    const handler = (e: KeyboardEvent) => {
+      e.preventDefault();
+      const next = buildShortcutString(e);
+      if (!next) return;
+      setTerminalVal(next);
+      setIsRecordingTerminal(false);
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [isOpen, isRecordingTerminal]);
+
   const handleAddConfig = () => {
       const newConfig: LLMConfig = {
           id: Date.now().toString(),
@@ -215,6 +234,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShor
         sidebarShortcut: sidebarVal || 'Cmd+1',
         closeEditorShortcut: closeValue || 'Cmd+W', 
         llmPanelShortcut: llmVal || 'Cmd+2',
+        terminalShortcut: terminalVal || 'Cmd+3',
         theme: themeValue || 'zinc' 
     });
     setLLMConfigs(localConfigs);
@@ -342,6 +362,23 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShor
                                 onFocus={() => setIsRecordingLLM(true)}
                                 onClick={() => setIsRecordingLLM(true)}
                                 className={clsx("w-44 bg-background/40 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none cursor-pointer text-center", isRecordingLLM && "ring-1 ring-accent/60 bg-accent/10")}
+                            />
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-4 border border-border rounded-xl px-4 py-3 bg-background/20">
+                            <div className="min-w-0">
+                            <div className="text-sm text-text font-semibold">Toggle Terminal</div>
+                            <div className="text-xs text-muted mt-1">Show/Hide the bottom terminal panel.</div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                            <input
+                                ref={terminalInputRef}
+                                value={terminalVal || 'Cmd+3'}
+                                readOnly
+                                onFocus={() => setIsRecordingTerminal(true)}
+                                onClick={() => setIsRecordingTerminal(true)}
+                                className={clsx("w-44 bg-background/40 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none cursor-pointer text-center", isRecordingTerminal && "ring-1 ring-accent/60 bg-accent/10")}
                             />
                             </div>
                         </div>

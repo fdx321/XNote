@@ -6,7 +6,7 @@ import rehypeHighlight from 'rehype-highlight';
 import remarkGfm from 'remark-gfm';
 import { useAppStore } from '../store';
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
-import { Columns, Maximize, Eye, Table, Sparkles } from 'lucide-react';
+import { Columns, Maximize, Eye, Table, Sparkles, Terminal } from 'lucide-react';
 import { clsx } from 'clsx';
 import 'highlight.js/styles/github-dark.css'; // or atom-one-dark
 // @ts-ignore
@@ -31,7 +31,7 @@ const hashString = (input: string) => {
 };
 
 export const NoteEditor: React.FC = () => {
-  const { selectedFile, editorMode, setEditorMode, currentPath, searchJump, setSearchJump, setLLMPanelOpen, llmPanelOpen, setChatInput } =
+  const { selectedFile, editorMode, setEditorMode, currentPath, searchJump, setSearchJump, setLLMPanelOpen, llmPanelOpen, setChatInput, terminalOpen, toggleTerminal } =
     useAppStore();
   const [content, setContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -514,6 +514,13 @@ class Duck {
                 title="AI Chat"
               >
                   <Sparkles size={16} />
+              </button>
+              <button 
+                onClick={toggleTerminal}
+                className={clsx("p-1.5 rounded hover:bg-surfaceHighlight", terminalOpen && "bg-surfaceHighlight text-accent")}
+                title="Toggle Terminal"
+              >
+                  <Terminal size={16} />
               </button>
           </div>
       </div>

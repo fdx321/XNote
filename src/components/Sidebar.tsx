@@ -50,7 +50,7 @@ import { InputModal } from './InputModal';
 import { ConfirmModal } from './ConfirmModal';
 
 export const Sidebar: React.FC<SidebarProps> = () => {
-  const { files, selectedFile, setSelectedFile, currentPath, loadFiles, setViewMode, moveFile, deleteFile, copyFile, renameFile, setViewPath, viewPath, setSearchJump, searchShortcut, closeEditorShortcut, pushNotice } = useAppStore();
+  const { files, selectedFile, setSelectedFile, currentPath, loadFiles, setViewMode, moveFile, deleteFile, copyFile, renameFile, setViewPath, viewPath, setSearchJump, searchShortcut, pushNotice } = useAppStore();
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; target: any; type: 'root' | 'folder' | 'file' } | null>(null);
   
@@ -128,19 +128,6 @@ export const Sidebar: React.FC<SidebarProps> = () => {
               return keyOk && modsOk;
           };
 
-          const closeShortcut = closeEditorShortcut || 'Cmd+W';
-          if (matchShortcut(closeShortcut)) {
-              if (!selectedFile || (selectedFile as any).is_dir) return;
-              e.preventDefault();
-              const p = String((selectedFile as any).path || '');
-              const idx = Math.max(p.lastIndexOf('/'), p.lastIndexOf('\\'));
-              const parent = idx > 0 ? p.slice(0, idx) : (currentPath || '');
-              setViewMode('card');
-              setViewPath(parent || currentPath || null);
-              setSelectedFile(null);
-              return;
-          }
-
           const shortcut = searchShortcut || 'Cmd+G';
           if (matchShortcut(shortcut)) {
               e.preventDefault();
@@ -149,7 +136,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
       };
       window.addEventListener('keydown', handler);
       return () => window.removeEventListener('keydown', handler);
-  }, [searchShortcut, closeEditorShortcut, selectedFile, currentPath, setSelectedFile, setViewMode, setViewPath]);
+  }, [searchShortcut]);
 
   const isLoading = !files;
 
@@ -413,7 +400,7 @@ export const Sidebar: React.FC<SidebarProps> = () => {
 
   return (
     <div className="w-full h-full bg-sidebar flex flex-col select-none">
-      <div className="p-4 border-b border-border flex justify-between items-center bg-sidebar/50 backdrop-blur-sm sticky top-0 z-10">
+      <div className="h-10 px-4 border-b border-border flex justify-between items-center bg-sidebar/50 backdrop-blur-sm sticky top-0 z-10">
         <h2 
             className="font-bold text-lg tracking-tight flex items-center cursor-pointer hover:opacity-80 transition-opacity"
             onClick={() => {

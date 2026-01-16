@@ -9,6 +9,27 @@ use walkdir::WalkDir;
 use std::collections::HashSet;
 use tauri::async_runtime;
 use std::sync::{mpsc, Arc, Mutex, OnceLock};
+use tauri::Manager;
+use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
+use std::collections::HashMap;
+use std::io::{Read, Write as _};
+
+struct TerminalSession {
+    pty_master: Box<dyn portable_pty::MasterPty + Send>,
+    writer: Box<dyn std::io::Write + Send>,
+}
+
+struct TerminalState {
+    sessions: Arc<Mutex<HashMap<String, TerminalSession>>>,
+}
+
+impl TerminalState {
+    fn new() -> Self {
+        Self {
+            sessions: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct FileNode {
@@ -102,6 +123,111 @@ fn save_config(config: String) -> Result<(), String> {
     }
 
     fs::write(config_path, config).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn create_terminal(
+    app: AppHandle,
+    state: tauri::State<'_, TerminalState>,
+    id: String,
+    cwd: Option<String>,
+) -> Result<(), String> {
+    let pty_system = NativePtySystem::default();
+    let size = PtySize {
+        rows: 24,
+        cols: 80,
+        pixel_width: 0,
+        pixel_height: 0,
+    };
+
+    let pair = pty_system.openpty(size).map_err(|e| e.to_string())?;
+
+    let mut cmd = CommandBuilder::new("zsh");
+    if let Some(path) = cwd {
+        if Path::new(&path).exists() {
+             cmd.cwd(path);
+        }
+    }
+    // Set some env vars if needed
+    cmd.env("TERM", "xterm-256color");
+
+    let _child = pair.slave.spawn_command(cmd).map_err(|e| e.to_string())?;
+
+    let mut reader = pair.master.try_clone_reader().map_err(|e| e.to_string())?;
+    let writer = pair.master.take_writer().map_err(|e| e.to_string())?;
+
+    // Store session
+    {
+        let mut sessions = state.sessions.lock().unwrap();
+        sessions.insert(id.clone(), TerminalSession {
+             pty_master: pair.master,
+             writer,
+        });
+    }
+
+    let app_handle = app.clone();
+    let session_id = id.clone();
+    
+    // Spawn reader thread
+    std::thread::spawn(move || {
+        let mut buffer = [0u8; 1024];
+        loop {
+            match reader.read(&mut buffer) {
+                Ok(n) if n > 0 => {
+                     let data = String::from_utf8_lossy(&buffer[..n]).to_string();
+                     let _ = app_handle.emit(&format!("terminal-output:{}", session_id), data);
+                }
+                Ok(_) => break, // EOF
+                Err(_) => break,
+            }
+        }
+        // Emit exit?
+        let _ = app_handle.emit(&format!("terminal-exit:{}", session_id), ());
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+fn write_to_terminal(
+    state: tauri::State<'_, TerminalState>,
+    id: String,
+    data: String,
+) -> Result<(), String> {
+    let mut sessions = state.sessions.lock().unwrap();
+    if let Some(session) = sessions.get_mut(&id) {
+        session.writer.write_all(data.as_bytes()).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn resize_terminal(
+    state: tauri::State<'_, TerminalState>,
+    id: String,
+    rows: u16,
+    cols: u16,
+) -> Result<(), String> {
+    let mut sessions = state.sessions.lock().unwrap();
+    if let Some(session) = sessions.get_mut(&id) {
+        session.pty_master.resize(PtySize {
+            rows,
+            cols,
+            pixel_width: 0,
+            pixel_height: 0,
+        }).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn close_terminal(
+    state: tauri::State<'_, TerminalState>,
+    id: String,
+) -> Result<(), String> {
+    let mut sessions = state.sessions.lock().unwrap();
+    sessions.remove(&id);
+    Ok(())
 }
 
 #[tauri::command]
@@ -952,6 +1078,8 @@ pub fn run() {
 
             app.set_menu(menu)?;
 
+            app.manage(TerminalState::new());
+
             Ok(())
         })
         .on_menu_event(|app, event| {
@@ -988,7 +1116,11 @@ pub fn run() {
             cancel_clean_unused_images,
             copy_file,
             get_config,
-            save_config
+            save_config,
+            create_terminal,
+            write_to_terminal,
+            resize_terminal,
+            close_terminal
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

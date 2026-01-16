@@ -58,6 +58,7 @@ interface AppState {
   sidebarShortcut: string;
   closeEditorShortcut: string;
   llmPanelShortcut: string;
+  terminalShortcut: string;
   theme: AppTheme;
   notice: { id: number; type: NoticeType; message: string } | null;
 
@@ -66,6 +67,11 @@ interface AppState {
   activeLLMConfigId: string | null;
   llmPanelOpen: boolean;
   llmPanelWidth: number;
+  
+  // Terminal State
+  terminalOpen: boolean;
+  terminalHeight: number;
+
   chatHistory: ChatMessage[];
   chatInput: string;
   systemPrompts: SystemPrompt[];
@@ -86,6 +92,7 @@ interface AppState {
   setSidebarShortcut: (shortcut: string) => void;
   setCloseEditorShortcut: (shortcut: string) => void;
   setLLMPanelShortcut: (shortcut: string) => void;
+  setTerminalShortcut: (shortcut: string) => void;
   setTheme: (theme: AppTheme) => void;
   pushNotice: (message: string, type?: NoticeType) => void;
   clearNotice: () => void;
@@ -94,6 +101,9 @@ interface AppState {
   setLLMPanelOpen: (open: boolean) => void;
   toggleLLMPanel: () => void;
   setLLMPanelWidth: (width: number) => void;
+  setTerminalOpen: (open: boolean) => void;
+  toggleTerminal: () => void;
+  setTerminalHeight: (height: number) => void;
   addChatMessage: (message: ChatMessage) => void;
   clearChatHistory: () => void;
   updateChatMessage: (id: string, content: string) => void;
@@ -123,12 +133,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   sidebarShortcut: 'Cmd+1',
   closeEditorShortcut: 'Cmd+W',
   llmPanelShortcut: 'Cmd+2',
+  terminalShortcut: 'Cmd+3',
   theme: 'zinc',
   notice: null,
   llmConfigs: [],
   activeLLMConfigId: null,
   llmPanelOpen: false,
   llmPanelWidth: 256,
+  terminalOpen: false,
+  terminalHeight: 300,
   chatHistory: [],
   chatInput: '',
   systemPrompts: [],
@@ -171,6 +184,22 @@ export const useAppStore = create<AppState>((set, get) => ({
   setLLMPanelShortcut: (shortcut) => {
       set({ llmPanelShortcut: shortcut });
       get().saveConfig();
+  },
+  setTerminalShortcut: (shortcut) => {
+      set({ terminalShortcut: shortcut });
+      get().saveConfig();
+  },
+  setTerminalOpen: (open) => {
+    set({ terminalOpen: open });
+    get().saveConfig();
+  },
+  toggleTerminal: () => {
+    set((s) => ({ terminalOpen: !s.terminalOpen }));
+    get().saveConfig();
+  },
+  setTerminalHeight: (height) => {
+    set({ terminalHeight: height });
+    get().saveConfig();
   },
   setTheme: (theme) => {
       set({ theme });
@@ -218,13 +247,18 @@ export const useAppStore = create<AppState>((set, get) => ({
                   const theme = (config.theme as AppTheme | undefined) ?? 'zinc';
                   set({
                       sidebarWidth: config.sidebarWidth ?? 256,
+                      sidebarOpen: config.sidebarOpen ?? true,
                       editorMode: config.editorMode ?? 'split',
                       searchShortcut: config.shortcuts?.search ?? 'Cmd+G',
+                      sidebarShortcut: config.shortcuts?.sidebar ?? 'Cmd+1',
                       closeEditorShortcut: config.shortcuts?.closeEditor ?? config.shortcuts?.close ?? 'Cmd+W',
+                      llmPanelShortcut: config.shortcuts?.llmPanel ?? 'Cmd+2',
+                      terminalShortcut: config.shortcuts?.terminal ?? 'Cmd+3',
                       theme,
                       llmConfigs: config.llm?.configs ?? [],
                       activeLLMConfigId: config.llm?.activeId ?? null,
                       llmPanelWidth: config.llm?.panelWidth ?? 300,
+                      terminalHeight: config.terminal?.height ?? 300,
                       systemPrompts: config.llm?.systemPrompts ?? [],
                       activeSystemPromptId: config.llm?.activeSystemPromptId ?? null
                   });
@@ -237,7 +271,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   saveConfig: async () => {
-      const { sidebarWidth, sidebarOpen, editorMode, searchShortcut, sidebarShortcut, closeEditorShortcut, llmPanelShortcut, theme, llmConfigs, activeLLMConfigId, llmPanelWidth, systemPrompts, activeSystemPromptId } = get();
+      const { sidebarWidth, sidebarOpen, editorMode, searchShortcut, sidebarShortcut, closeEditorShortcut, llmPanelShortcut, terminalShortcut, theme, llmConfigs, activeLLMConfigId, llmPanelWidth, terminalHeight, systemPrompts, activeSystemPromptId } = get();
       try {
           // @ts-ignore
           if (window.__TAURI_INTERNALS__) {
@@ -250,7 +284,8 @@ export const useAppStore = create<AppState>((set, get) => ({
                       search: searchShortcut,
                       sidebar: sidebarShortcut,
                       closeEditor: closeEditorShortcut,
-                      llmPanel: llmPanelShortcut
+                      llmPanel: llmPanelShortcut,
+                      terminal: terminalShortcut
                   },
                   llm: {
                       configs: llmConfigs,
@@ -258,6 +293,9 @@ export const useAppStore = create<AppState>((set, get) => ({
                       panelWidth: llmPanelWidth,
                       systemPrompts,
                       activeSystemPromptId
+                  },
+                  terminal: {
+                      height: terminalHeight
                   }
               };
               await invoke('save_config', { config: JSON.stringify(config) });
