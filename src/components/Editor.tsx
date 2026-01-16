@@ -544,7 +544,11 @@ class Duck {
                         scrollBeyondLastLine: false,
                         automaticLayout: true,
                         fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                        padding: { top: 16, bottom: 16 }
+                        padding: { top: 16, bottom: 16 },
+                        scrollbar: {
+                            verticalScrollbarSize: 10,
+                            horizontalScrollbarSize: 10
+                        }
                     }}
                 />
             </div>
