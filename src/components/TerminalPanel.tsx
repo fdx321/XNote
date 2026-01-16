@@ -17,7 +17,7 @@ export function TerminalPanel({ isOpen }: { isOpen: boolean }) {
     const { terminalHeight, currentPath, selectedFile, setTerminalHeight } = useAppStore();
     const [sessions, setSessions] = useState<TerminalSession[]>([]);
     const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
-    const terminalRefs = useRef<Record<string, { term: Terminal; fitAddon: FitAddon; container: HTMLDivElement | null }>>({});
+    const terminalRefs = useRef<Record<string, { term: Terminal; fitAddon: FitAddon; decoder: TextDecoder; container: HTMLDivElement | null }>>({});
     const containerRef = useRef<HTMLDivElement>(null);
     const [isResizing, setIsResizing] = useState(false);
     const hasAutoCreatedSessionRef = useRef(false);
@@ -68,7 +68,7 @@ export function TerminalPanel({ isOpen }: { isOpen: boolean }) {
             if (!terminalRefs.current[activeSessionId]) {
                 // Initialize xterm
                 const term = new Terminal({
-                    fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+                    fontFamily: 'Menlo, Monaco, "SF Mono", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC", "Noto Sans Mono CJK SC", "Microsoft YaHei", monospace',
                     fontSize: 12,
                     theme: {
                         background: '#18181b', // zinc-900
@@ -94,11 +94,23 @@ export function TerminalPanel({ isOpen }: { isOpen: boolean }) {
                 const { rows, cols } = fitAddon.proposeDimensions() || { rows: 24, cols: 80 };
                 invoke('resize_terminal', { id: activeSessionId, rows, cols });
 
-                terminalRefs.current[activeSessionId] = { term, fitAddon, container: container as HTMLDivElement };
+                terminalRefs.current[activeSessionId] = { term, fitAddon, decoder: new TextDecoder('utf-8'), container: container as HTMLDivElement };
 
                 // Listen for output
                 listen(`terminal-output:${activeSessionId}`, (event) => {
-                    term.write(event.payload as string);
+                    const payload: any = event.payload as any;
+                    if (typeof payload === 'string') {
+                        term.write(payload);
+                        return;
+                    }
+                    if (payload && payload.encoding === 'base64' && typeof payload.data === 'string') {
+                        const binStr = atob(payload.data);
+                        const bytes = new Uint8Array(binStr.length);
+                        for (let i = 0; i < binStr.length; i++) bytes[i] = binStr.charCodeAt(i);
+                        const ref = terminalRefs.current[activeSessionId];
+                        const text = ref.decoder.decode(bytes, { stream: true });
+                        if (text) term.write(text);
+                    }
                 });
             } else {
                 // Re-fit on switch

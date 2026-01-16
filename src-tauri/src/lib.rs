@@ -12,7 +12,7 @@ use std::sync::{mpsc, Arc, Mutex, OnceLock};
 use tauri::Manager;
 use portable_pty::{CommandBuilder, NativePtySystem, PtySize, PtySystem};
 use std::collections::HashMap;
-use std::io::{Read, Write as _};
+use std::io::Read;
 
 struct TerminalSession {
     pty_master: Box<dyn portable_pty::MasterPty + Send>,
@@ -42,6 +42,12 @@ pub struct FileNode {
 
 use tauri::{AppHandle, Emitter};
 use tauri::menu::{Menu, Submenu, MenuItem, PredefinedMenuItem};
+
+#[derive(Serialize, Clone)]
+struct TerminalOutputChunk {
+    encoding: &'static str,
+    data: String,
+}
 
 #[tauri::command]
 fn get_default_workspace(_app: AppHandle) -> Result<String, String> {
@@ -174,8 +180,11 @@ fn create_terminal(
         loop {
             match reader.read(&mut buffer) {
                 Ok(n) if n > 0 => {
-                     let data = String::from_utf8_lossy(&buffer[..n]).to_string();
-                     let _ = app_handle.emit(&format!("terminal-output:{}", session_id), data);
+                     let payload = TerminalOutputChunk {
+                         encoding: "base64",
+                         data: general_purpose::STANDARD.encode(&buffer[..n]),
+                     };
+                     let _ = app_handle.emit(&format!("terminal-output:{}", session_id), payload);
                 }
                 Ok(_) => break, // EOF
                 Err(_) => break,
