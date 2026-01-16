@@ -10,8 +10,27 @@ import { CleanUnusedImagesModal } from './components/CleanUnusedImagesModal';
 import { Notice } from './components/Notice';
 import { LLMPanel } from './components/LLMPanel';
 
+const normalizeMainKey = (key: string) => {
+  if (!key) return '';
+  if (key === ' ') return 'Space';
+  if (key.length === 1) return key.toUpperCase();
+  if (key.startsWith('Arrow')) return key.replace('Arrow', '');
+  return key[0].toUpperCase() + key.slice(1);
+};
+
+const buildShortcutString = (e: KeyboardEvent) => {
+  const mods: string[] = [];
+  if (e.metaKey) mods.push('Cmd');
+  if (e.ctrlKey) mods.push('Ctrl');
+  if (e.altKey) mods.push('Alt');
+  if (e.shiftKey) mods.push('Shift');
+  const main = normalizeMainKey(e.key);
+  if (!main || ['Meta', 'Control', 'Alt', 'Shift'].includes(main)) return null;
+  return [...mods, main].join('+');
+};
+
 function App() {
-  const { currentPath, viewMode, selectedFile, loadFiles, loadConfig, sidebarWidth, setSidebarWidth, searchShortcut, setSearchShortcut, closeEditorShortcut, setCloseEditorShortcut, theme, setTheme, llmPanelOpen, llmPanelWidth, setLLMPanelWidth } = useAppStore();
+  const { currentPath, viewMode, selectedFile, loadFiles, loadConfig, sidebarWidth, setSidebarWidth, sidebarOpen, toggleSidebar, sidebarShortcut, setSidebarShortcut, searchShortcut, setSearchShortcut, closeEditorShortcut, setCloseEditorShortcut, llmPanelShortcut, setLLMPanelShortcut, theme, setTheme, llmPanelOpen, toggleLLMPanel, llmPanelWidth, setLLMPanelWidth } = useAppStore();
   const [showAbout, setShowAbout] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [cleanProgress, setCleanProgress] = useState<{ message: string; current: number; total: number }>({
@@ -77,6 +96,23 @@ function App() {
       window.removeEventListener("mouseup", stopResizingRight);
     };
   }, [resize, stopResizing, stopResizingRight]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const current = buildShortcutString(e);
+      if (!current) return;
+
+      if (current === (sidebarShortcut || 'Cmd+1')) {
+        e.preventDefault();
+        toggleSidebar();
+      } else if (current === (llmPanelShortcut || 'Cmd+2')) {
+        e.preventDefault();
+        toggleLLMPanel();
+      }
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [sidebarShortcut, llmPanelShortcut, toggleSidebar, toggleLLMPanel]);
 
   useEffect(() => {
     let unlisten: () => void;
@@ -242,7 +278,7 @@ function App() {
     <div className="app-container flex flex-col h-screen w-screen bg-background text-text overflow-hidden" style={{ cursor: isResizing ? 'col-resize' : 'auto' }}>
       <Notice />
       <div className="app-main-row flex flex-row flex-1 min-h-0 overflow-hidden">
-        {currentPath && (
+        {currentPath && sidebarOpen && (
           <>
               <div className="sidebar-container flex-shrink-0" style={{ width: sidebarWidth }}>
               <Sidebar />
@@ -328,13 +364,17 @@ function App() {
       <SettingsModal
         isOpen={showSettings}
         searchShortcut={searchShortcut}
+        sidebarShortcut={sidebarShortcut}
         closeEditorShortcut={closeEditorShortcut}
+        llmPanelShortcut={llmPanelShortcut}
         theme={theme}
         onClose={() => setShowSettings(false)}
         onSave={(next) => {
           setTheme(next.theme);
           setSearchShortcut(next.searchShortcut);
+          setSidebarShortcut(next.sidebarShortcut);
           setCloseEditorShortcut(next.closeEditorShortcut);
+          setLLMPanelShortcut(next.llmPanelShortcut);
         }}
       />
 

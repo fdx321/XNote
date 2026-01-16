@@ -39,10 +39,12 @@ const buildShortcutString = (e: KeyboardEvent) => {
 interface SettingsModalProps {
   isOpen: boolean;
   searchShortcut: string;
+  sidebarShortcut: string;
   closeEditorShortcut: string;
+  llmPanelShortcut: string;
   theme: AppTheme;
   onClose: () => void;
-  onSave: (next: { searchShortcut: string; closeEditorShortcut: string; theme: AppTheme }) => void;
+  onSave: (next: { searchShortcut: string; sidebarShortcut: string; closeEditorShortcut: string; llmPanelShortcut: string; theme: AppTheme }) => void;
 }
 
 const THEME_OPTIONS: Array<{ value: AppTheme; label: string; hint: string }> = [
@@ -51,14 +53,20 @@ const THEME_OPTIONS: Array<{ value: AppTheme; label: string; hint: string }> = [
   { value: 'grape', label: 'Grape', hint: 'Purple-tinted dark' },
 ];
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShortcut, closeEditorShortcut, theme, onClose, onSave }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShortcut, sidebarShortcut, closeEditorShortcut, llmPanelShortcut, theme, onClose, onSave }) => {
   const { llmConfigs, activeLLMConfigId, setLLMConfigs, setActiveLLMConfigId, systemPrompts, activeSystemPromptId, setSystemPrompts, setActiveSystemPromptId } = useAppStore();
   const [activeTab, setActiveTab] = useState<'general' | 'shortcuts' | 'llm' | 'prompts'>('general');
 
   const [value, setValue] = useState(searchShortcut || 'Cmd+G');
-  const [closeValue, setCloseValue] = useState('Cmd+W');
+  const [sidebarVal, setSidebarVal] = useState(sidebarShortcut || 'Cmd+1');
+  const [closeValue, setCloseValue] = useState(closeEditorShortcut || 'Cmd+W');
+  const [llmVal, setLlmVal] = useState(llmPanelShortcut || 'Cmd+2');
+
   const [isRecording, setIsRecording] = useState(false);
+  const [isRecordingSidebar, setIsRecordingSidebar] = useState(false);
   const [isRecordingClose, setIsRecordingClose] = useState(false);
+  const [isRecordingLLM, setIsRecordingLLM] = useState(false);
+
   const [themeValue, setThemeValue] = useState<AppTheme>(theme || 'zinc');
   
   const [localConfigs, setLocalConfigs] = useState<LLMConfig[]>([]);
@@ -68,21 +76,29 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShor
   const [localActivePromptId, setLocalActivePromptId] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const sidebarInputRef = useRef<HTMLInputElement>(null);
   const closeInputRef = useRef<HTMLInputElement>(null);
+  const llmInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     setValue(searchShortcut || 'Cmd+G');
+    setSidebarVal(sidebarShortcut || 'Cmd+1');
     setCloseValue(closeEditorShortcut || 'Cmd+W');
+    setLlmVal(llmPanelShortcut || 'Cmd+2');
+    
     setIsRecording(false);
+    setIsRecordingSidebar(false);
     setIsRecordingClose(false);
+    setIsRecordingLLM(false);
+
     setThemeValue(theme || 'zinc');
     setLocalConfigs(JSON.parse(JSON.stringify(llmConfigs)));
     setLocalActiveId(activeLLMConfigId);
     setLocalPrompts(JSON.parse(JSON.stringify(systemPrompts || [])));
     setLocalActivePromptId(activeSystemPromptId);
     setActiveTab('general');
-  }, [isOpen, searchShortcut, closeEditorShortcut, theme, llmConfigs, activeLLMConfigId, systemPrompts, activeSystemPromptId]);
+  }, [isOpen, searchShortcut, sidebarShortcut, closeEditorShortcut, llmPanelShortcut, theme, llmConfigs, activeLLMConfigId, systemPrompts, activeSystemPromptId]);
 
   useMemo(() => {
     const v = value || 'Cmd+G';
@@ -119,6 +135,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShor
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
   }, [isOpen, isRecordingClose]);
+
+  useEffect(() => {
+    if (!isOpen || !isRecordingSidebar) return;
+    const handler = (e: KeyboardEvent) => {
+      e.preventDefault();
+      const next = buildShortcutString(e);
+      if (!next) return;
+      setSidebarVal(next);
+      setIsRecordingSidebar(false);
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [isOpen, isRecordingSidebar]);
+
+  useEffect(() => {
+    if (!isOpen || !isRecordingLLM) return;
+    const handler = (e: KeyboardEvent) => {
+      e.preventDefault();
+      const next = buildShortcutString(e);
+      if (!next) return;
+      setLlmVal(next);
+      setIsRecordingLLM(false);
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [isOpen, isRecordingLLM]);
 
   const handleAddConfig = () => {
       const newConfig: LLMConfig = {
@@ -168,7 +210,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShor
   };
 
   const handleSave = () => {
-    onSave({ searchShortcut: value || 'Cmd+G', closeEditorShortcut: closeValue || 'Cmd+W', theme: themeValue || 'zinc' });
+    onSave({ 
+        searchShortcut: value || 'Cmd+G', 
+        sidebarShortcut: sidebarVal || 'Cmd+1',
+        closeEditorShortcut: closeValue || 'Cmd+W', 
+        llmPanelShortcut: llmVal || 'Cmd+2',
+        theme: themeValue || 'zinc' 
+    });
     setLLMConfigs(localConfigs);
     setActiveLLMConfigId(localActiveId);
     setSystemPrompts(localPrompts);
@@ -260,6 +308,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, searchShor
                                 onFocus={() => setIsRecording(true)}
                                 onClick={() => setIsRecording(true)}
                                 className={clsx("w-44 bg-background/40 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none cursor-pointer text-center", isRecording && "ring-1 ring-accent/60 bg-accent/10")}
+                            />
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-4 border border-border rounded-xl px-4 py-3 bg-background/20">
+                            <div className="min-w-0">
+                            <div className="text-sm text-text font-semibold">Toggle Sidebar</div>
+                            <div className="text-xs text-muted mt-1">Show/Hide the left sidebar.</div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                            <input
+                                ref={sidebarInputRef}
+                                value={sidebarVal || 'Cmd+1'}
+                                readOnly
+                                onFocus={() => setIsRecordingSidebar(true)}
+                                onClick={() => setIsRecordingSidebar(true)}
+                                className={clsx("w-44 bg-background/40 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none cursor-pointer text-center", isRecordingSidebar && "ring-1 ring-accent/60 bg-accent/10")}
+                            />
+                            </div>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-4 border border-border rounded-xl px-4 py-3 bg-background/20">
+                            <div className="min-w-0">
+                            <div className="text-sm text-text font-semibold">Toggle AI Chat</div>
+                            <div className="text-xs text-muted mt-1">Show/Hide the right AI assistant panel.</div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                            <input
+                                ref={llmInputRef}
+                                value={llmVal || 'Cmd+2'}
+                                readOnly
+                                onFocus={() => setIsRecordingLLM(true)}
+                                onClick={() => setIsRecordingLLM(true)}
+                                className={clsx("w-44 bg-background/40 border border-border rounded-lg px-3 py-2 text-sm text-text outline-none cursor-pointer text-center", isRecordingLLM && "ring-1 ring-accent/60 bg-accent/10")}
                             />
                             </div>
                         </div>

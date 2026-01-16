@@ -52,9 +52,12 @@ interface AppState {
   viewMode: 'tree' | 'card'; // 'tree' is standard sidebar+editor, 'card' is folder view
   viewPath: string | null; // The path currently being viewed in Card Mode
   sidebarWidth: number;
+  sidebarOpen: boolean;
   searchJump: { path: string; line: number } | null;
   searchShortcut: string;
+  sidebarShortcut: string;
   closeEditorShortcut: string;
+  llmPanelShortcut: string;
   theme: AppTheme;
   notice: { id: number; type: NoticeType; message: string } | null;
 
@@ -76,9 +79,13 @@ interface AppState {
   setViewMode: (mode: 'tree' | 'card') => void;
   setViewPath: (path: string | null) => void;
   setSidebarWidth: (width: number) => void;
+  setSidebarOpen: (open: boolean) => void;
+  toggleSidebar: () => void;
   setSearchJump: (jump: { path: string; line: number } | null) => void;
   setSearchShortcut: (shortcut: string) => void;
+  setSidebarShortcut: (shortcut: string) => void;
   setCloseEditorShortcut: (shortcut: string) => void;
+  setLLMPanelShortcut: (shortcut: string) => void;
   setTheme: (theme: AppTheme) => void;
   pushNotice: (message: string, type?: NoticeType) => void;
   clearNotice: () => void;
@@ -110,9 +117,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   viewMode: 'tree',
   viewPath: null,
   sidebarWidth: 256,
+  sidebarOpen: true,
   searchJump: null,
   searchShortcut: 'Cmd+G',
+  sidebarShortcut: 'Cmd+1',
   closeEditorShortcut: 'Cmd+W',
+  llmPanelShortcut: 'Cmd+2',
   theme: 'zinc',
   notice: null,
   llmConfigs: [],
@@ -137,13 +147,29 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ sidebarWidth: width });
       get().saveConfig();
   },
+  setSidebarOpen: (open) => {
+      set({ sidebarOpen: open });
+      get().saveConfig();
+  },
+  toggleSidebar: () => {
+      set((s) => ({ sidebarOpen: !s.sidebarOpen }));
+      get().saveConfig();
+  },
   setSearchJump: (jump) => set({ searchJump: jump }),
   setSearchShortcut: (shortcut) => {
       set({ searchShortcut: shortcut });
       get().saveConfig();
   },
+  setSidebarShortcut: (shortcut) => {
+      set({ sidebarShortcut: shortcut });
+      get().saveConfig();
+  },
   setCloseEditorShortcut: (shortcut) => {
       set({ closeEditorShortcut: shortcut });
+      get().saveConfig();
+  },
+  setLLMPanelShortcut: (shortcut) => {
+      set({ llmPanelShortcut: shortcut });
       get().saveConfig();
   },
   setTheme: (theme) => {
@@ -211,17 +237,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   saveConfig: async () => {
-      const { sidebarWidth, editorMode, searchShortcut, closeEditorShortcut, theme, llmConfigs, activeLLMConfigId, llmPanelWidth, systemPrompts, activeSystemPromptId } = get();
+      const { sidebarWidth, sidebarOpen, editorMode, searchShortcut, sidebarShortcut, closeEditorShortcut, llmPanelShortcut, theme, llmConfigs, activeLLMConfigId, llmPanelWidth, systemPrompts, activeSystemPromptId } = get();
       try {
           // @ts-ignore
           if (window.__TAURI_INTERNALS__) {
               const config = {
                   sidebarWidth,
+                  sidebarOpen,
                   editorMode,
                   theme,
                   shortcuts: {
                       search: searchShortcut,
-                      closeEditor: closeEditorShortcut
+                      sidebar: sidebarShortcut,
+                      closeEditor: closeEditorShortcut,
+                      llmPanel: llmPanelShortcut
                   },
                   llm: {
                       configs: llmConfigs,
